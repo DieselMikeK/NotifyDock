@@ -44,12 +44,14 @@ function ActionComposer() {
     resetTemplate,
     selectedHistoryId,
     sending,
+    setShipDate,
     setEmailType,
     setFromAddress,
     setHistoryExpanded,
     setMessage,
     setStatus,
     setSubject,
+    shipDate,
     status,
     subject,
   } = useComposerState(TARGET);
@@ -177,6 +179,15 @@ function ActionComposer() {
           </Box>
         </InlineStack>
 
+        {showsShipDate(emailType) ? (
+          <TextField
+            label="Ship date"
+            placeholder="Insert Ship date"
+            value={shipDate}
+            onChange={setShipDate}
+          />
+        ) : null}
+
         <TextArea
           label="Message"
           rows={18}
@@ -300,6 +311,13 @@ function formatHistoryTimestamp(sentAt) {
 
 function buildHistorySummary(entry) {
   return `${labelEmailType(entry.emailType)} Sent | ${formatHistoryTimestamp(entry.sentAt)} - To: ${entry.customerEmail}`;
+}
+
+function showsShipDate(emailType) {
+  return (
+    emailType === "backorder_notice" ||
+    emailType === "shipping_delay"
+  );
 }
 
 function CenteredSeparator() {

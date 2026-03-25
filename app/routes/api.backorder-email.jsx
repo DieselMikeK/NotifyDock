@@ -34,6 +34,7 @@ export async function action({request}) {
   const emailType = payload?.email_type;
   const orderId = `${payload?.order_id || ""}`.trim();
   const sku = `${payload?.sku || ""}`.trim();
+  const shipDate = `${payload?.ship_date || ""}`.trim();
   const orderNumber = `${payload?.order_number || ""}`.trim();
   const firstName = `${payload?.first_name || ""}`.trim();
   const customerEmail = `${payload?.customer_email || ""}`.trim();
@@ -76,6 +77,7 @@ export async function action({request}) {
       orderId,
       orderNumber,
       sentByEmail: session.email || "",
+      shipDate,
       shop: shopName || session.shop,
       sku,
       subject,
@@ -148,9 +150,5 @@ function buildSubject({emailType, orderNumber}) {
 }
 
 function isMessageAllowed({emailType, message}) {
-  if (emailType === "will_call_ready") {
-    return true;
-  }
-
-  return Boolean(message);
+  return emailType !== "will_call_in_progress" || Boolean(message);
 }

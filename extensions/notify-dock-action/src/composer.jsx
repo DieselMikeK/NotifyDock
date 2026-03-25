@@ -38,6 +38,7 @@ export function useComposerState(target) {
   const [firstName, setFirstName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [sku, setSku] = useState("");
+  const [shipDate, setShipDate] = useState("");
   const [emailType, setEmailType] = useState("backorder_notice");
   const [fromAddress, setFromAddress] = useState(FROM_OPTIONS[0].value);
   const [subject, setSubject] = useState(
@@ -67,6 +68,7 @@ export function useComposerState(target) {
     setFirstName("");
     setCustomerEmail("");
     setSku("");
+    setShipDate("");
     setEmailType("backorder_notice");
     setFromAddress(FROM_OPTIONS[0].value);
     setSubjectDirty(false);
@@ -202,11 +204,12 @@ export function useComposerState(target) {
         buildMessage({
           emailType,
           orderNumber,
+          shipDate,
           sku,
         }),
       );
     }
-  }, [emailType, orderNumber, sku, messageDirty]);
+  }, [emailType, orderNumber, shipDate, sku, messageDirty]);
 
   useEffect(() => {
     let cancelled = false;
@@ -284,6 +287,7 @@ export function useComposerState(target) {
       buildMessage({
         emailType,
         orderNumber,
+        shipDate,
         sku,
       }),
     );
@@ -308,6 +312,7 @@ export function useComposerState(target) {
           order_id: orderId,
           order_number: orderNumber,
           shop_name: shopName,
+          ship_date: shipDate,
           sku,
           subject,
         }),
@@ -356,6 +361,7 @@ export function useComposerState(target) {
     resetTemplate,
     selectedHistoryId: launchedHistoryId,
     sending,
+    setShipDate,
     setEmailType: (value) => {
       setEmailType(value);
       setSubjectDirty(false);
@@ -372,6 +378,7 @@ export function useComposerState(target) {
       setSubject(value);
       setSubjectDirty(true);
     },
+    shipDate,
     status,
     subject,
   };
@@ -381,7 +388,7 @@ export function canSendComposer({customerEmail, emailType, message, subject}) {
   return Boolean(
     customerEmail &&
       subject &&
-      (emailType === "will_call_ready" || message),
+      (requiresMessage(emailType) ? message : true),
   );
 }
 
@@ -401,7 +408,7 @@ function buildSubject({emailType, orderNumber, shopName}) {
   return `Message from ${shopName || "{{ shop.name }}"}`.trim();
 }
 
-function buildMessage({emailType, orderNumber, sku}) {
+function buildMessage({emailType, orderNumber, shipDate, sku}) {
   if (emailType === "will_call_ready") {
     return "";
   }
@@ -422,7 +429,7 @@ function buildMessage({emailType, orderNumber, sku}) {
       ``,
       `Based upon information from the manufacturer, the current ship date of your part(s) is:`,
       ``,
-      `Insert Ship date`,
+      `${shipDate || "Insert Ship date"}`,
       ``,
       `OPTIONS:`,
       `HANG TIGHT: If you are okay to wait, you are good to go! Once we have tracking, or any other updates we will forward them to this same email address.`,
@@ -438,7 +445,7 @@ function buildMessage({emailType, orderNumber, sku}) {
   return [
     `<center><b>${sku || "SKU"}</b></center>`,
     ``,
-    `Based upon information from the manufacturer, the current ship date of your part(s) is: <b>ETA</b>`,
+    `Based upon information from the manufacturer, the current ship date of your part(s) is: <b>${shipDate || "Insert Ship date"}</b>`,
     ``,
     `OPTIONS:`,
     ``,
@@ -450,6 +457,10 @@ function buildMessage({emailType, orderNumber, sku}) {
     ``,
     `QUESTIONS? If you have questions on anything, please feel free to respond to this e-mail. You can also reach us by phone or Chat through the website, M-F 6AM-6PM PST.`,
   ].join("\n");
+}
+
+function requiresMessage(emailType) {
+  return emailType === "will_call_in_progress";
 }
 
 function getLaunchUrl(launchUrl) {
