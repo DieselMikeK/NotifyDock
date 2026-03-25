@@ -19,8 +19,11 @@ export function useComposerState(target) {
   const launchUrl = getLaunchUrl(api.intents?.launchUrl);
   const launchedOrderId = getLaunchParam(launchUrl, "orderId");
   const launchedOrderIdFromPath = getOrderIdFromAdminUrl(launchUrl);
+  const launchedHistoryId = getLaunchParam(launchUrl, "historyId");
   const launchNonce = getLaunchParam(launchUrl, "openedAt");
   const launchedShowHistory = getLaunchParam(launchUrl, "showHistory") === "1";
+  const shouldShowHistoryOnLaunch =
+    launchedShowHistory || Boolean(launchedHistoryId);
   const orderId =
     launchedOrderId || launchedOrderIdFromPath || data?.selected?.[0]?.id || null;
   const [loadingOrder, setLoadingOrder] = useState(true);
@@ -45,7 +48,9 @@ export function useComposerState(target) {
   const [message, setMessage] = useState("");
   const [messageDirty, setMessageDirty] = useState(false);
   const [history, setHistory] = useState([]);
-  const [historyExpanded, setHistoryExpanded] = useState(launchedShowHistory);
+  const [historyExpanded, setHistoryExpanded] = useState(
+    shouldShowHistoryOnLaunch,
+  );
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyNotice, setHistoryNotice] = useState("");
   const [historyReloadToken, setHistoryReloadToken] = useState(0);
@@ -64,10 +69,10 @@ export function useComposerState(target) {
     setSubjectDirty(false);
     setMessageDirty(false);
     setHistory([]);
-    setHistoryExpanded(launchedShowHistory);
+    setHistoryExpanded(shouldShowHistoryOnLaunch);
     setHistoryLoading(false);
     setHistoryNotice("");
-  }, [launchedShowHistory, launchNonce, orderId]);
+  }, [launchNonce, orderId, shouldShowHistoryOnLaunch]);
 
   useEffect(() => {
     let cancelled = false;
@@ -343,6 +348,7 @@ export function useComposerState(target) {
     message,
     orderId,
     resetTemplate,
+    selectedHistoryId: launchedHistoryId,
     sending,
     setEmailType: (value) => {
       setEmailType(value);

@@ -1,5 +1,6 @@
 import {
   AdminAction,
+  Badge,
   Banner,
   BlockStack,
   Box,
@@ -7,14 +8,13 @@ import {
   InlineStack,
   Link,
   ProgressIndicator,
-  Section,
   Select,
   Text,
   TextArea,
   TextField,
   reactExtension,
 } from "@shopify/ui-extensions-react/admin";
-import {useState} from "react";
+import {useEffect, useState} from "react";
 import {
   canSendComposer,
   EMAIL_TYPES,
@@ -41,6 +41,7 @@ function ActionComposer() {
     loadingOrder,
     message,
     resetTemplate,
+    selectedHistoryId,
     sending,
     setEmailType,
     setFromAddress,
@@ -81,14 +82,19 @@ function ActionComposer() {
                   setHistoryExpanded(!historyExpanded);
                 }}
                 variant="secondary"
-              >
+            >
                 {historyExpanded
                   ? `Hide history (${history.length})`
                   : `View history (${history.length})`}
               </Button>
             </InlineStack>
 
-            {historyExpanded ? <EmailHistoryList history={history} /> : null}
+            {historyExpanded ? (
+              <EmailHistoryList
+                history={history}
+                selectedHistoryId={selectedHistoryId}
+              />
+            ) : null}
           </BlockStack>
         ) : null}
 
@@ -172,45 +178,54 @@ function ActionComposer() {
   );
 }
 
-function EmailHistoryList({history}) {
+function EmailHistoryList({history, selectedHistoryId}) {
   return (
-    <BlockStack gap="base">
-      {history.map((entry) => (
-        <EmailHistoryItem key={entry.id} entry={entry} />
+    <BlockStack gap="small">
+      {history.map((entry, index) => (
+        <BlockStack key={entry.id} gap="small">
+          <EmailHistoryItem
+            entry={entry}
+            isSelected={entry.id === selectedHistoryId}
+          />
+          {index < history.length - 1 ? <CenteredSeparator /> : null}
+        </BlockStack>
       ))}
     </BlockStack>
   );
 }
 
-function EmailHistoryItem({entry}) {
-  const [expanded, setExpanded] = useState(false);
+function EmailHistoryItem({entry, isSelected}) {
+  const [expanded, setExpanded] = useState(isSelected);
+
+  useEffect(() => {
+    if (isSelected) {
+      setExpanded(true);
+    }
+  }, [isSelected]);
 
   return (
-    <Section
-      accessibilityLabel={`${labelEmailType(entry.emailType)} sent to ${entry.customerEmail}`}
-      padding="base"
-    >
-      <BlockStack gap="small">
-        <Text>{buildHistorySummary(entry)}</Text>
+    <BlockStack gap="small">
+      <InlineStack inlineAlignment="start">
+        <Badge>{buildHistorySummary(entry)}</Badge>
+      </InlineStack>
 
-        <InlineStack inlineAlignment="start">
-          <Link
-            onPress={() => {
-              setExpanded(!expanded);
-            }}
-          >
-            {expanded ? "Hide email" : "View email"}
-          </Link>
-        </InlineStack>
+      <InlineStack inlineAlignment="start">
+        <Link
+          onPress={() => {
+            setExpanded(!expanded);
+          }}
+        >
+          {expanded ? "Hide email" : "View email"}
+        </Link>
+      </InlineStack>
 
-        {expanded ? (
-          <BlockStack gap="small">
-            <Text fontWeight="bold">{entry.subject}</Text>
-            <Text>{formatEmailPreview(entry.message)}</Text>
-          </BlockStack>
-        ) : null}
-      </BlockStack>
-    </Section>
+      {expanded ? (
+        <BlockStack gap="small">
+          <Text fontWeight="bold">{entry.subject}</Text>
+          <Text>{formatEmailPreview(entry.message)}</Text>
+        </BlockStack>
+      ) : null}
+    </BlockStack>
   );
 }
 
@@ -235,6 +250,14 @@ function formatHistoryTimestamp(sentAt) {
 
 function buildHistorySummary(entry) {
   return `${labelEmailType(entry.emailType)} Sent | ${formatHistoryTimestamp(entry.sentAt)} - To: ${entry.customerEmail}`;
+}
+
+function CenteredSeparator() {
+  return (
+    <InlineStack inlineAlignment="center">
+      <Text>-</Text>
+    </InlineStack>
+  );
 }
 
 function formatEmailPreview(message) {
