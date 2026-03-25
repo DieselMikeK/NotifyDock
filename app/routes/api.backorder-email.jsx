@@ -1,6 +1,6 @@
 import {json} from "@remix-run/node";
 import {authenticate} from "../shopify.server";
-import {sendNotifyDockEvent} from "../klaviyo.server";
+import {deliverNotifyDockEmail} from "../email-delivery.server";
 
 const VALID_EMAIL_TYPES = new Set(["backorder_notice", "will_call_ready"]);
 
@@ -11,7 +11,7 @@ export async function loader({request}) {
 }
 
 export async function action({request}) {
-  const {cors, session} = await authenticate.admin(request);
+  const {admin, cors, session} = await authenticate.admin(request);
 
   if (request.method === "OPTIONS") {
     return cors(new Response(null, {status: 204}));
@@ -26,6 +26,7 @@ export async function action({request}) {
   }
 
   const emailType = payload?.email_type;
+  const orderId = `${payload?.order_id || ""}`.trim();
   const sku = `${payload?.sku || ""}`.trim();
   const orderNumber = `${payload?.order_number || ""}`.trim();
   const firstName = `${payload?.first_name || ""}`.trim();
@@ -40,22 +41,27 @@ export async function action({request}) {
     return cors(json({error: "Invalid email type."}, {status: 400}));
   }
 
-  if (!customerEmail || !orderNumber || !message || !subject) {
+  if (!customerEmail || !orderId || !orderNumber || !message || !subject) {
     return cors(
       json(
-        {error: "Customer email, order number, subject, and message are required."},
+        {
+          error:
+            "Customer email, order ID, order number, subject, and message are required.",
+        },
         {status: 400},
       ),
     );
   }
 
   try {
-    const result = await sendNotifyDockEvent({
+    const result = await deliverNotifyDockEmail({
+      admin,
       customerEmail,
       emailType,
       firstName,
       fromAddress,
       message,
+      orderId,
       orderNumber,
       sentByEmail: session.email || "",
       shop: shopName || session.shop,
@@ -66,8 +72,8 @@ export async function action({request}) {
     return cors(
       json({
         ok: true,
-        message:
-          "Klaviyo accepted the Notify Dock event. The matching Klaviyo flow will send the email.",
+        message: result.message,
+        provider: result.provider,
         metricName: result.metricName,
       }),
     );

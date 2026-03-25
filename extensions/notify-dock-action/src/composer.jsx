@@ -223,6 +223,7 @@ export function useComposerState(target) {
           first_name: firstName,
           from_address: fromAddress,
           message,
+          order_id: orderId,
           order_number: orderNumber,
           shop_name: shopName,
           sku,
