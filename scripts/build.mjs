@@ -2,7 +2,7 @@ import {spawnSync} from "node:child_process";
 
 run("npx", ["prisma", "generate"]);
 
-if (process.env.DATABASE_URL) {
+if (process.env.POSTGRES_PRISMA_URL) {
   run("npx", ["prisma", "migrate", "deploy"]);
 }
 
