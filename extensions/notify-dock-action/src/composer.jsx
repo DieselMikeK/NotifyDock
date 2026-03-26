@@ -8,12 +8,7 @@ export const EMAIL_TYPES = [
   {label: "Will Call - In Progress", value: "will_call_in_progress"},
 ];
 
-export const FROM_OPTIONS = [
-  {
-    label: "orders@dieselpowerproducts.com",
-    value: "orders@dieselpowerproducts.com",
-  },
-];
+const DEFAULT_FROM_OPTIONS = [];
 
 export function useComposerState(target) {
   const api = useApi(target);
@@ -45,7 +40,10 @@ export function useComposerState(target) {
   const [shipDate, setShipDate] = useState("");
   const [products, setProducts] = useState([]);
   const [emailType, setEmailType] = useState("backorder_notice");
-  const [fromAddress, setFromAddress] = useState(FROM_OPTIONS[0].value);
+  const [fromAddress, setFromAddress] = useState("");
+  const [fromOptions, setFromOptions] = useState(DEFAULT_FROM_OPTIONS);
+  const [fromOptionsLoading, setFromOptionsLoading] = useState(false);
+  const [fromOptionsNotice, setFromOptionsNotice] = useState("");
   const [subject, setSubject] = useState(
     buildSubject({
       emailType: "backorder_notice",
@@ -78,7 +76,10 @@ export function useComposerState(target) {
     setShipDate("");
     setProducts([]);
     setEmailType("backorder_notice");
-    setFromAddress(FROM_OPTIONS[0].value);
+    setFromAddress("");
+    setFromOptions(DEFAULT_FROM_OPTIONS);
+    setFromOptionsLoading(false);
+    setFromOptionsNotice("");
     setSubjectDirty(false);
     setHistory([]);
     setHistoryExpanded(shouldShowHistoryOnLaunch);
@@ -200,6 +201,63 @@ export function useComposerState(target) {
       cancelled = true;
     };
   }, [api, launchNonce, orderId]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFromOptions() {
+      setFromOptionsLoading(true);
+      setFromOptionsNotice("");
+
+      try {
+        const response = await fetch("/api/from-addresses");
+        const payload = await response.json().catch(() => ({}));
+
+        if (!response.ok) {
+          throw new Error(payload.error || "Notify Dock could not load sender emails.");
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        const options = Array.isArray(payload.options)
+          ? payload.options.filter((option) => option?.value && option?.label)
+          : [];
+
+        setFromOptions(options);
+        setFromOptionsNotice(`${payload.warning || ""}`.trim());
+        setFromAddress((currentValue) =>
+          selectPreferredFromAddress({
+            currentValue,
+            options,
+          }),
+        );
+      } catch (fromOptionsError) {
+        if (cancelled) {
+          return;
+        }
+
+        setFromOptions([]);
+        setFromOptionsNotice(
+          fromOptionsError instanceof Error
+            ? fromOptionsError.message
+            : "Notify Dock could not load sender emails.",
+        );
+        setFromAddress("");
+      } finally {
+        if (!cancelled) {
+          setFromOptionsLoading(false);
+        }
+      }
+    }
+
+    loadFromOptions();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [launchNonce]);
 
   useEffect(() => {
     if (!subjectDirty) {
@@ -434,6 +492,9 @@ export function useComposerState(target) {
     error,
     firstName,
     fromAddress,
+    fromOptions,
+    fromOptionsLoading,
+    fromOptionsNotice,
     handleSend,
     history,
     historyExpanded,
@@ -479,6 +540,7 @@ export function useComposerState(target) {
 export function canSendComposer({
   customerEmail,
   emailType,
+  fromAddress,
   loadingOrder,
   loadingProduct,
   lookupError,
@@ -491,6 +553,7 @@ export function canSendComposer({
 
   if (
     !customerEmail ||
+    !fromAddress ||
     !subject ||
     !requestedSkus.length ||
     !products.length ||
@@ -530,6 +593,18 @@ function buildSubject({emailType, orderNumber, shopName}) {
   }
 
   return `Message from ${shopName || "{{ shop.name }}"}`.trim();
+}
+
+function selectPreferredFromAddress({currentValue, options}) {
+  if (!Array.isArray(options) || !options.length) {
+    return "";
+  }
+
+  if (currentValue && options.some((option) => option.value === currentValue)) {
+    return currentValue;
+  }
+
+  return options[0].value;
 }
 
 function requiresShipDate(emailType) {

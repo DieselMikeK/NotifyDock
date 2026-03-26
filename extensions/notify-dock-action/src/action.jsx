@@ -20,7 +20,6 @@ import {useEffect, useState} from "react";
 import {
   canSendComposer,
   EMAIL_TYPES,
-  FROM_OPTIONS,
   useComposerState,
 } from "./composer.jsx";
 
@@ -36,6 +35,9 @@ function ActionComposer() {
     error,
     firstName,
     fromAddress,
+    fromOptions,
+    fromOptionsLoading,
+    fromOptionsNotice,
     handleSend,
     history,
     historyExpanded,
@@ -64,6 +66,7 @@ function ActionComposer() {
   const canSend = canSendComposer({
     customerEmail,
     emailType,
+    fromAddress,
     loadingOrder,
     loadingProduct,
     lookupError,
@@ -227,6 +230,8 @@ function ActionComposer() {
 
         {status ? <Banner tone={status.tone}>{status.message}</Banner> : null}
 
+        {fromOptionsNotice ? <Banner tone="warning">{fromOptionsNotice}</Banner> : null}
+
         <InlineStack inlineAlignment="space-between">
           <Box inlineSize="48%">
             <Select
@@ -257,8 +262,9 @@ function ActionComposer() {
 
           <Box inlineSize="48%">
             <Select
+              disabled={fromOptionsLoading || !fromOptions.length}
               label="From"
-              options={FROM_OPTIONS}
+              options={fromOptions}
               value={fromAddress}
               onChange={setFromAddress}
             />
