@@ -180,19 +180,16 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
   return (
     <BlockStack gap="none">
       {!isFirst ? (
-        <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-          <HistoryTimelineConnector lines={2} />
+        <InlineStack blockAlignment="end" gap="base" inlineAlignment="start">
+          <HistoryTimelineConnector alignment="end" />
           <Box />
         </InlineStack>
       ) : null}
 
       <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-        <HistoryTimelineMarker
-          showTop={!isFirst}
-          showBottom={!isLast}
-        />
+        <HistoryTimelineDot />
 
-        <Box>
+        <Box paddingBlockEnd="small">
           <InlineStack inlineAlignment="start">
             <Badge>{buildHistorySummary(entry)}</Badge>
           </InlineStack>
@@ -200,8 +197,8 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
       </InlineStack>
 
       {!isLast ? (
-        <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-          <HistoryTimelineConnector lines={2} />
+        <InlineStack blockAlignment="start" gap="base" inlineAlignment="start">
+          <HistoryTimelineConnector alignment="start" />
           <Box paddingBlockEnd="small" />
         </InlineStack>
       ) : null}
@@ -209,26 +206,22 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
   );
 }
 
-function HistoryTimelineConnector({lines = 2}) {
+function HistoryTimelineConnector({alignment = "center"}) {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <BlockStack gap="none" inlineAlignment="center">
-        {Array.from({length: lines}).map((_, index) => (
-          <Text key={`history-line-${index}`}>│</Text>
-        ))}
-      </BlockStack>
+      <InlineStack blockAlignment={alignment} inlineAlignment="center">
+        <Text>│</Text>
+      </InlineStack>
     </Box>
   );
 }
 
-function HistoryTimelineMarker({showTop, showBottom}) {
+function HistoryTimelineDot() {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <BlockStack gap="none" inlineAlignment="center">
-        <Text>{showTop ? "│" : " "}</Text>
+      <InlineStack inlineAlignment="center">
         <Text>●</Text>
-        <Text>{showBottom ? "│" : " "}</Text>
-      </BlockStack>
+      </InlineStack>
     </Box>
   );
 }
