@@ -40,13 +40,10 @@ export function useComposerState(target) {
   const [firstName, setFirstName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [defaultSku, setDefaultSku] = useState("");
-  const [defaultProductTitle, setDefaultProductTitle] = useState("");
+  const [defaultProducts, setDefaultProducts] = useState([]);
   const [sku, setSku] = useState("");
   const [shipDate, setShipDate] = useState("");
-  const [productTitle, setProductTitle] = useState("");
-  const [productVariantTitle, setProductVariantTitle] = useState("");
-  const [productImageUrl, setProductImageUrl] = useState("");
-  const [productImageAlt, setProductImageAlt] = useState("");
+  const [products, setProducts] = useState([]);
   const [emailType, setEmailType] = useState("backorder_notice");
   const [fromAddress, setFromAddress] = useState(FROM_OPTIONS[0].value);
   const [subject, setSubject] = useState(
@@ -76,13 +73,10 @@ export function useComposerState(target) {
     setFirstName("");
     setCustomerEmail("");
     setDefaultSku("");
-    setDefaultProductTitle("");
+    setDefaultProducts([]);
     setSku("");
     setShipDate("");
-    setProductTitle("");
-    setProductVariantTitle("");
-    setProductImageUrl("");
-    setProductImageAlt("");
+    setProducts([]);
     setEmailType("backorder_notice");
     setFromAddress(FROM_OPTIONS[0].value);
     setSubjectDirty(false);
@@ -173,7 +167,8 @@ export function useComposerState(target) {
         const uniqueSkus = Array.from(
           new Set(activeLineItems.map(({sku, title}) => sku || title).filter(Boolean)),
         );
-        const primaryLineItem = activeLineItems.find(({sku}) => sku) || activeLineItems[0];
+        const primaryLineItem =
+          activeLineItems.find(({sku}) => sku) || activeLineItems[0];
         const customerEmail = [order.customer?.email, order.email].find(Boolean) || "";
         const firstName = [
           order.customer?.firstName,
@@ -181,16 +176,15 @@ export function useComposerState(target) {
           order.billingAddress?.firstName,
         ].find(Boolean) || "";
         const resolvedSku = primaryLineItem?.sku || uniqueSkus[0] || "";
-        const resolvedProductTitle = primaryLineItem?.title || "";
+        const fallbackProducts = buildFallbackProducts(primaryLineItem);
 
         setOrderNumber(order.name || "");
         setFirstName(firstName);
         setCustomerEmail(customerEmail);
         setDefaultSku(resolvedSku);
-        setDefaultProductTitle(resolvedProductTitle);
+        setDefaultProducts(fallbackProducts);
         setSku(resolvedSku);
-        setProductTitle(resolvedProductTitle);
-        setProductVariantTitle("");
+        setProducts(fallbackProducts);
         setLoadingOrder(false);
       } catch (_loadError) {
         if (!cancelled) {
@@ -220,15 +214,12 @@ export function useComposerState(target) {
   }, [emailType, orderNumber, shopName, subjectDirty]);
 
   useEffect(() => {
-    const normalizedSku = normalizeSku(sku);
+    const requestedSkus = splitSkuInput(sku);
 
-    if (!normalizedSku) {
+    if (!requestedSkus.length) {
       setLoadingProduct(false);
       setLookupError("");
-      setProductTitle("");
-      setProductVariantTitle("");
-      setProductImageUrl("");
-      setProductImageAlt("");
+      setProducts([]);
       return;
     }
 
@@ -239,7 +230,7 @@ export function useComposerState(target) {
 
       try {
         const response = await fetch(
-          `/api/product-by-sku?sku=${encodeURIComponent(normalizedSku)}`,
+          `/api/product-by-sku?sku=${encodeURIComponent(requestedSkus.join(","))}`,
         );
         const payload = await response.json().catch(() => ({}));
 
@@ -248,29 +239,46 @@ export function useComposerState(target) {
         }
 
         if (!response.ok) {
-          throw new Error(payload.error || "Unable to load product details for this SKU.");
+          throw new Error(payload.error || "Unable to load product details for these SKUs.");
         }
 
-        setProductTitle(payload.product?.title || "");
-        setProductVariantTitle(payload.product?.variantTitle || "");
-        setProductImageUrl(payload.product?.imageUrl || "");
-        setProductImageAlt(payload.product?.imageAlt || "");
+        const resolvedProducts = Array.isArray(payload.products)
+          ? payload.products.map((product) => normalizeFetchedProduct(product)).filter(Boolean)
+          : [];
+        const missingSkus = Array.isArray(payload.missingSkus)
+          ? payload.missingSkus.filter(Boolean)
+          : [];
+
+        setProducts(
+          resolvedProducts.length
+            ? resolvedProducts
+            : shouldUseDefaultFallback({
+                defaultProducts,
+                defaultSku,
+                requestedSkus,
+              })
+              ? defaultProducts
+              : [],
+        );
+        setLookupError(buildMissingSkuMessage(missingSkus));
       } catch (lookupError) {
         if (cancelled) {
           return;
         }
 
-        const shouldUseFallbackTitle =
-          normalizedSku === normalizeSku(defaultSku) && defaultProductTitle;
-
-        setProductTitle(shouldUseFallbackTitle ? defaultProductTitle : "");
-        setProductVariantTitle("");
-        setProductImageUrl("");
-        setProductImageAlt("");
+        setProducts(
+          shouldUseDefaultFallback({
+            defaultProducts,
+            defaultSku,
+            requestedSkus,
+          })
+            ? defaultProducts
+            : [],
+        );
         setLookupError(
           lookupError instanceof Error
             ? lookupError.message
-            : "Unable to load product details for this SKU.",
+            : "Unable to load product details for these SKUs.",
         );
       } finally {
         if (!cancelled) {
@@ -283,7 +291,7 @@ export function useComposerState(target) {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [defaultProductTitle, defaultSku, sku]);
+  }, [defaultProducts, defaultSku, sku]);
 
   useEffect(() => {
     let cancelled = false;
@@ -358,15 +366,14 @@ export function useComposerState(target) {
     );
     setShipDate("");
     setSku(defaultSku);
-    setProductTitle(defaultProductTitle);
-    setProductVariantTitle("");
-    setProductImageUrl("");
-    setProductImageAlt("");
+    setProducts(defaultProducts);
     setLookupError("");
     setStatus(null);
   }
 
   async function handleSend() {
+    const primaryProduct = products[0] || null;
+
     setSending(true);
     setStatus(null);
 
@@ -383,12 +390,14 @@ export function useComposerState(target) {
           from_address: fromAddress,
           order_id: orderId,
           order_number: orderNumber,
-          product_image_url: productImageUrl,
-          product_title: productTitle,
-          product_variant_title: productVariantTitle,
+          product_image_alt: primaryProduct?.productImageAlt || "",
+          product_image_url: primaryProduct?.productImageUrl || "",
+          product_title: primaryProduct?.productTitle || "",
+          product_variant_title: primaryProduct?.productVariantTitle || "",
+          products: products.map((product) => serializeProductPayload(product)),
           ship_date: shipDate,
           shop_name: shopName,
-          sku,
+          sku: products.map((product) => product.sku).filter(Boolean).join(", ") || sku,
           subject,
         }),
       });
@@ -436,10 +445,7 @@ export function useComposerState(target) {
     lookupError,
     orderId,
     orderNumber,
-    productImageAlt,
-    productImageUrl,
-    productTitle,
-    productVariantTitle,
+    products,
     resetComposer,
     selectedHistoryId: launchedHistoryId,
     sending,
@@ -475,19 +481,31 @@ export function canSendComposer({
   emailType,
   loadingOrder,
   loadingProduct,
-  productTitle,
+  lookupError,
+  products,
   shipDate,
   sku,
   subject,
 }) {
+  const requestedSkus = splitSkuInput(sku);
+
   if (
     !customerEmail ||
     !subject ||
-    !sku ||
-    !productTitle ||
+    !requestedSkus.length ||
+    !products.length ||
     loadingOrder ||
-    loadingProduct
+    loadingProduct ||
+    Boolean(lookupError)
   ) {
+    return false;
+  }
+
+  if (products.length !== requestedSkus.length) {
+    return false;
+  }
+
+  if (products.some((product) => !product.productTitle)) {
     return false;
   }
 
@@ -559,4 +577,74 @@ function getOrderIdFromAdminUrl(launchUrl) {
 
 function normalizeSku(value) {
   return `${value || ""}`.trim().toUpperCase();
+}
+
+function splitSkuInput(value) {
+  return Array.from(
+    new Set(
+      `${value || ""}`
+        .split(",")
+        .map((entry) => `${entry || ""}`.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function buildFallbackProducts(primaryLineItem) {
+  if (!primaryLineItem?.sku && !primaryLineItem?.title) {
+    return [];
+  }
+
+  return [
+    {
+      productImageAlt: primaryLineItem?.title || "",
+      productImageUrl: "",
+      productTitle: primaryLineItem?.title || "",
+      productVariantTitle: "",
+      sku: primaryLineItem?.sku || primaryLineItem?.title || "",
+    },
+  ];
+}
+
+function normalizeFetchedProduct(product) {
+  const sku = `${product?.sku || ""}`.trim();
+  const productTitle = `${product?.title || ""}`.trim();
+
+  if (!sku && !productTitle) {
+    return null;
+  }
+
+  return {
+    productImageAlt: `${product?.imageAlt || ""}`.trim(),
+    productImageUrl: `${product?.imageUrl || ""}`.trim(),
+    productTitle,
+    productVariantTitle: `${product?.variantTitle || ""}`.trim(),
+    sku,
+  };
+}
+
+function serializeProductPayload(product) {
+  return {
+    product_image_alt: product.productImageAlt || "",
+    product_image_url: product.productImageUrl || "",
+    product_title: product.productTitle || "",
+    product_variant_title: product.productVariantTitle || "",
+    sku: product.sku || "",
+  };
+}
+
+function shouldUseDefaultFallback({defaultProducts, defaultSku, requestedSkus}) {
+  return (
+    requestedSkus.length === 1 &&
+    normalizeSku(requestedSkus[0]) === normalizeSku(defaultSku) &&
+    defaultProducts.length > 0
+  );
+}
+
+function buildMissingSkuMessage(missingSkus) {
+  if (!missingSkus.length) {
+    return "";
+  }
+
+  return `No Shopify product matched SKU${missingSkus.length > 1 ? "s" : ""}: ${missingSkus.join(", ")}.`;
 }

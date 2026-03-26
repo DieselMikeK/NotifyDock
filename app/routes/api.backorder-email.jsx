@@ -40,20 +40,29 @@ export async function action({request}) {
   const firstName = `${payload?.first_name || ""}`.trim();
   const customerEmail = `${payload?.customer_email || ""}`.trim();
   const fromAddress = `${payload?.from_address || ""}`.trim();
-  const productImageUrl = `${payload?.product_image_url || ""}`.trim();
-  const productTitle = `${payload?.product_title || ""}`.trim();
-  const productVariantTitle = `${payload?.product_variant_title || ""}`.trim();
   const shopName = `${payload?.shop_name || ""}`.trim();
   const subject =
     `${payload?.subject || buildSubject({emailType, orderNumber})}`.trim();
+  const products = normalizeProducts({
+    fallbackProduct: {
+      product_image_alt: `${payload?.product_image_alt || ""}`.trim(),
+      product_image_url: `${payload?.product_image_url || ""}`.trim(),
+      product_title: `${payload?.product_title || ""}`.trim(),
+      product_variant_title: `${payload?.product_variant_title || ""}`.trim(),
+      sku,
+    },
+    rawProducts: payload?.products,
+  });
+  const primaryProduct = products[0] || null;
+  const requestedSkus = splitSkuInput(sku);
+  const resolvedSkuValue =
+    products.map((product) => product.sku).filter(Boolean).join(", ") || sku;
   const message = buildNotifyDockMessage({
     emailType,
     firstName,
     orderNumber,
-    productTitle,
-    productVariantTitle,
+    products,
     shipDate,
-    sku,
   }).trim();
 
   if (!VALID_EMAIL_TYPES.has(emailType)) {
@@ -64,8 +73,10 @@ export async function action({request}) {
     !customerEmail ||
     !orderId ||
     !orderNumber ||
-    !sku ||
-    !productTitle ||
+    !requestedSkus.length ||
+    !products.length ||
+    products.length !== requestedSkus.length ||
+    !primaryProduct?.productTitle ||
     !subject ||
     !isPayloadAllowed({emailType, shipDate})
   ) {
@@ -73,7 +84,7 @@ export async function action({request}) {
       json(
         {
           error:
-            "Order, customer email, order number, SKU, product title, and subject are required. Ship date is required for this email type.",
+            "Order, customer email, order number, and subject are required. Every comma-separated SKU must resolve to a product title. Ship date is required for this email type.",
         },
         {status: 400},
       ),
@@ -90,13 +101,14 @@ export async function action({request}) {
       message,
       orderId,
       orderNumber,
-      productImageUrl,
-      productTitle,
-      productVariantTitle,
+      productImageUrl: primaryProduct?.productImageUrl || "",
+      productTitle: primaryProduct?.productTitle || "",
+      productVariantTitle: primaryProduct?.productVariantTitle || "",
+      products,
       sentByEmail: session.email || "",
       shipDate,
       shop: shopName || session.shop,
-      sku,
+      sku: resolvedSkuValue,
       subject,
     });
     let historyWarning = "";
@@ -114,7 +126,7 @@ export async function action({request}) {
         sentAt,
         sentByEmail: session.email || "",
         shop: session.shop,
-        sku,
+        sku: resolvedSkuValue,
         subject,
       });
     } catch (historyError) {
@@ -172,4 +184,52 @@ function isPayloadAllowed({emailType, shipDate}) {
   }
 
   return true;
+}
+
+function splitSkuInput(value) {
+  return Array.from(
+    new Set(
+      `${value || ""}`
+        .split(",")
+        .map((entry) => `${entry || ""}`.trim())
+        .filter(Boolean),
+    ),
+  );
+}
+
+function normalizeProducts({fallbackProduct, rawProducts}) {
+  const products = Array.isArray(rawProducts)
+    ? rawProducts
+        .map((product) => normalizeProduct(product))
+        .filter(Boolean)
+    : [];
+
+  if (products.length) {
+    return products;
+  }
+
+  const fallback = normalizeProduct(fallbackProduct);
+
+  return fallback ? [fallback] : [];
+}
+
+function normalizeProduct(product) {
+  const sku = `${product?.sku || ""}`.trim();
+  const productTitle =
+    `${product?.product_title || product?.productTitle || ""}`.trim();
+
+  if (!sku && !productTitle) {
+    return null;
+  }
+
+  return {
+    productImageAlt:
+      `${product?.product_image_alt || product?.productImageAlt || ""}`.trim(),
+    productImageUrl:
+      `${product?.product_image_url || product?.productImageUrl || ""}`.trim(),
+    productTitle,
+    productVariantTitle:
+      `${product?.product_variant_title || product?.productVariantTitle || ""}`.trim(),
+    sku,
+  };
 }

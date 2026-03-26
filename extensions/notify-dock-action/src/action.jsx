@@ -48,10 +48,7 @@ function ActionComposer() {
     loadingProduct,
     lookupError,
     orderNumber,
-    productImageAlt,
-    productImageUrl,
-    productTitle,
-    productVariantTitle,
+    products,
     resetComposer,
     selectedHistoryId,
     sending,
@@ -73,7 +70,8 @@ function ActionComposer() {
     emailType,
     loadingOrder,
     loadingProduct,
-    productTitle,
+    lookupError,
+    products,
     shipDate,
     sku,
     subject,
@@ -220,6 +218,11 @@ function ActionComposer() {
           </Box>
         </InlineStack>
 
+        <Text>
+          Separate multiple SKUs with commas. Notify Dock will search Shopify for each SKU and
+          inject every resolved title and image into the preview.
+        </Text>
+
         {loadingProduct ? (
           <ProgressIndicator size="small" accessibilityLabel="Loading product preview" />
         ) : null}
@@ -231,10 +234,7 @@ function ActionComposer() {
           emailType={emailType}
           firstName={firstName}
           orderNumber={orderNumber}
-          productImageAlt={productImageAlt}
-          productImageUrl={productImageUrl}
-          productTitle={productTitle}
-          productVariantTitle={productVariantTitle}
+          products={products}
           shipDate={shipDate}
           sku={sku}
         />
@@ -309,24 +309,21 @@ function TemplatePreview({
   emailType,
   firstName,
   orderNumber,
-  productImageAlt,
-  productImageUrl,
-  productTitle,
-  productVariantTitle,
+  products,
   shipDate,
   sku,
 }) {
-  const resolvedSku = sku || "{{ event.sku }}";
+  const resolvedProducts = products.length ? products : buildPlaceholderProducts(sku);
   const resolvedShipDate = formatShipDate(shipDate) || "{{ event.ship_date }}";
-  const resolvedProductTitle =
-    buildProductLabel(productTitle, productVariantTitle) || "{{ event.product_title }}";
+  const skuSummary =
+    resolvedProducts.map((product) => product.sku).filter(Boolean).join(", ") ||
+    "{{ event.sku }}";
   const previewParagraphs = buildTemplateParagraphs({
     emailType,
     firstName,
     orderNumber,
-    productTitle: resolvedProductTitle,
+    productCount: resolvedProducts.length,
     shipDate: resolvedShipDate,
-    sku: resolvedSku,
   });
 
   return (
@@ -338,7 +335,7 @@ function TemplatePreview({
 
         <InlineStack inlineAlignment="start" gap="base">
           <Badge tone="info">{labelEmailType(emailType)}</Badge>
-          <Badge tone="info">SKU: {resolvedSku}</Badge>
+          <Badge tone="info">SKUs: {skuSummary}</Badge>
           {showsShipDate(emailType) ? (
             <Badge tone="info">Ship date: {resolvedShipDate}</Badge>
           ) : null}
@@ -346,27 +343,43 @@ function TemplatePreview({
 
         <Divider />
 
-        {productImageUrl ? (
-          <Image
-            source={productImageUrl}
-            accessibilityLabel={productImageAlt || resolvedProductTitle}
-          />
-        ) : (
-          <Box padding="base">
-            <Text>
-              The product image will appear here when the SKU matches a Shopify product image.
-            </Text>
-          </Box>
-        )}
-
-        <Heading size={3}>{resolvedProductTitle}</Heading>
         <Text>To: {customerEmail || "{{ profile.email }}"}</Text>
 
         {previewParagraphs.map((paragraph, index) => (
           <Text key={`preview-paragraph-${index}`}>{paragraph}</Text>
         ))}
+
+        <ProductPreviewList products={resolvedProducts} />
       </BlockStack>
     </Section>
+  );
+}
+
+function ProductPreviewList({products}) {
+  return (
+    <BlockStack gap="base">
+      {products.map((product, index) => (
+        <Box key={`${product.sku || "sku"}-${index}`} padding="base">
+          <BlockStack gap="small">
+            {product.productImageUrl ? (
+              <Image
+                source={product.productImageUrl}
+                accessibilityLabel={product.productImageAlt || buildProductLabel(product)}
+              />
+            ) : (
+              <Box padding="base">
+                <Text>
+                  The product image will appear here when the SKU matches a Shopify product image.
+                </Text>
+              </Box>
+            )}
+
+            <Heading size={3}>{buildProductLabel(product)}</Heading>
+            <Text>SKU: {product.sku || "{{ item.sku }}"}</Text>
+          </BlockStack>
+        </Box>
+      ))}
+    </BlockStack>
   );
 }
 
@@ -440,28 +453,27 @@ function formatShipDate(value) {
   });
 }
 
-function buildProductLabel(productTitle, productVariantTitle) {
-  if (!productVariantTitle || productVariantTitle === "Default Title") {
-    return productTitle;
+function buildProductLabel(product) {
+  if (!product?.productVariantTitle || product.productVariantTitle === "Default Title") {
+    return product?.productTitle || "{{ item.product_title }}";
   }
 
-  return `${productTitle} - ${productVariantTitle}`.trim();
+  return `${product.productTitle || "{{ item.product_title }}"} - ${product.productVariantTitle}`.trim();
 }
 
 function buildTemplateParagraphs({
   emailType,
   firstName,
   orderNumber,
-  productTitle,
+  productCount,
   shipDate,
-  sku,
 }) {
   if (emailType === "will_call_ready") {
     return [
       `Pick Up on Location Order ${orderNumber || "#"}`,
       `Hello ${firstName || "{{ profile.first_name|default:'there' }}"},`,
       "Your order has been processed. We will contact you once your complete order is here and ready for pickup at Will Call.",
-      `Reference item: ${productTitle} (${sku})`,
+      `Reference item${productCount === 1 ? "" : "s"} below.`,
       "Thank you.",
     ];
   }
@@ -470,7 +482,7 @@ function buildTemplateParagraphs({
     return [
       `Hello ${firstName || "{{ profile.first_name|default:'there' }}"},`,
       "Your order has been processed. We will contact you once your complete order is here and ready for pickup at Will Call.",
-      `Reference item: ${productTitle} (${sku})`,
+      `Reference item${productCount === 1 ? "" : "s"} below.`,
       "Thank you.",
     ];
   }
@@ -478,7 +490,7 @@ function buildTemplateParagraphs({
   if (emailType === "shipping_delay") {
     return [
       "Thanks so much for shopping with Diesel Power Products, we really do appreciate it.",
-      `The below product is currently on backorder: ${productTitle} (${sku}).`,
+      `The below product${productCount === 1 ? " is" : "s are"} currently on backorder.`,
       `Based upon information from the manufacturer, the current ship date is: ${shipDate}.`,
       "HANG TIGHT: If you are okay to wait, you are good to go. Once we have tracking, or any other updates, we will forward them to this same email address.",
       "CHECK OPTIONS: If you would like a comparable option that is on the shelf and ready to ship, our sales technicians can help.",
@@ -488,13 +500,48 @@ function buildTemplateParagraphs({
   }
 
   return [
-    `Product: ${productTitle} (${sku})`,
+    `The following product${productCount === 1 ? "" : "s"} are included in this backorder notice.`,
     `Based upon information from the manufacturer, the current ship date of your part(s) is: ${shipDate}.`,
     "HANG TIGHT: If you are okay to wait, you are good to go. Once we have tracking, or any other updates, we will forward them to this same email address.",
     "CHECK OPTIONS: If you would like a comparable option that is on the shelf and ready to ship, our sales technicians can help.",
     "CANCEL: If the backorder timeline is too long, we can cancel and refund the backordered item(s).",
     "QUESTIONS: Reply to this email or reach out by phone or website chat, Monday through Friday from 6AM to 6PM Pacific.",
   ];
+}
+
+function buildPlaceholderProducts(sku) {
+  const requestedSkus = splitSkuInput(sku);
+
+  if (requestedSkus.length) {
+    return requestedSkus.map((requestedSku) => ({
+      productImageAlt: "",
+      productImageUrl: "",
+      productTitle: "{{ item.product_title }}",
+      productVariantTitle: "",
+      sku: requestedSku,
+    }));
+  }
+
+  return [
+    {
+      productImageAlt: "",
+      productImageUrl: "",
+      productTitle: "{{ item.product_title }}",
+      productVariantTitle: "",
+      sku: "{{ item.sku }}",
+    },
+  ];
+}
+
+function splitSkuInput(value) {
+  return Array.from(
+    new Set(
+      `${value || ""}`
+        .split(",")
+        .map((entry) => `${entry || ""}`.trim())
+        .filter(Boolean),
+    ),
+  );
 }
 
 function showsShipDate(emailType) {
