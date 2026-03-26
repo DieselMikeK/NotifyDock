@@ -1,5 +1,16 @@
 const KLAVIYO_API_URL = "https://a.klaviyo.com/api/events/";
+const KLAVIYO_TEMPLATE_RENDER_URL = "https://a.klaviyo.com/api/template-render";
 const KLAVIYO_API_REVISION = process.env.KLAVIYO_API_REVISION || "2024-07-15";
+const TEMPLATE_IDS = {
+  backorder_notice:
+    process.env.KLAVIYO_BACKORDER_TEMPLATE_ID || "TGEPX6",
+  shipping_delay:
+    process.env.KLAVIYO_SHIPPING_DELAY_TEMPLATE_ID || "",
+  will_call_in_progress:
+    process.env.KLAVIYO_WILL_CALL_IN_PROGRESS_TEMPLATE_ID || "",
+  will_call_ready:
+    process.env.KLAVIYO_WILL_CALL_READY_TEMPLATE_ID || "",
+};
 
 export const METRIC_NAMES = {
   backorder_notice:
@@ -159,6 +170,77 @@ export async function listNotifyDockEventsForOrder({
     });
 }
 
+export async function renderNotifyDockTemplate({
+  customerEmail,
+  emailType,
+  firstName,
+  orderNumber,
+  products = [],
+  shipDate,
+  sku,
+}) {
+  const templateId = TEMPLATE_IDS[emailType];
+
+  if (!templateId) {
+    const error = new Error(
+      `No Klaviyo template ID is configured for ${emailType}.`,
+    );
+    error.status = 400;
+    throw error;
+  }
+
+  const payload = await fetchKlaviyoPayload(KLAVIYO_TEMPLATE_RENDER_URL, {
+    method: "POST",
+    body: JSON.stringify({
+      data: {
+        type: "template",
+        id: templateId,
+        attributes: {
+          context: {
+            event: {
+              product_image_url: products[0]?.productImageUrl || "",
+              product_title: products[0]?.productTitle || "",
+              product_variant_title: products[0]?.productVariantTitle || "",
+              products: products.map((product) => ({
+                product_image_alt: product.productImageAlt,
+                product_image_url: product.productImageUrl,
+                product_title: product.productTitle,
+                product_variant_title: product.productVariantTitle,
+                sku: product.sku,
+              })),
+              ship_date: shipDate,
+              sku,
+            },
+            profile: {
+              email: customerEmail,
+              ...(firstName ? {first_name: firstName} : {}),
+            },
+            person: {
+              email: customerEmail,
+              ...(firstName ? {first_name: firstName} : {}),
+            },
+            customer: {
+              email: customerEmail,
+              ...(firstName ? {first_name: firstName} : {}),
+            },
+            order: {
+              name: orderNumber,
+              number: orderNumber,
+            },
+          },
+        },
+      },
+    }),
+    emptyMessage: "Klaviyo did not return a rendered template preview.",
+  });
+
+  return {
+    html: `${payload?.data?.attributes?.html || ""}`.trim(),
+    templateId,
+    text: `${payload?.data?.attributes?.text || ""}`.trim(),
+  };
+}
+
 async function getProfileIdByEmail(email) {
   const params = new URLSearchParams({
     filter: `equals(email,"${email}")`,
@@ -173,6 +255,16 @@ async function getProfileIdByEmail(email) {
 }
 
 async function fetchKlaviyoJson(pathname, {emptyMessage}) {
+  return fetchKlaviyoPayload(`https://a.klaviyo.com/api${pathname}`, {
+    method: "GET",
+    emptyMessage,
+  });
+}
+
+async function fetchKlaviyoPayload(
+  url,
+  {body, emptyMessage, method = "GET"},
+) {
   const privateApiKey = process.env.KLAVIYO_PRIVATE_API_KEY;
 
   if (!privateApiKey) {
@@ -183,13 +275,15 @@ async function fetchKlaviyoJson(pathname, {emptyMessage}) {
     throw error;
   }
 
-  const response = await fetch(`https://a.klaviyo.com/api${pathname}`, {
-    method: "GET",
+  const response = await fetch(url, {
+    method,
     headers: {
-      Accept: "application/json",
+      Accept: "application/vnd.api+json",
       Authorization: `Klaviyo-API-Key ${privateApiKey}`,
+      ...(body ? {"Content-Type": "application/vnd.api+json"} : {}),
       revision: KLAVIYO_API_REVISION,
     },
+    ...(body ? {body} : {}),
   });
 
   if (!response.ok) {

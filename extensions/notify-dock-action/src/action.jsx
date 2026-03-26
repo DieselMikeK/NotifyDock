@@ -27,6 +27,7 @@ import {
 } from "./composer.jsx";
 
 const TARGET = "admin.order-details.action.render";
+const APP_URL = "https://notify-dock.vercel.app";
 
 export default reactExtension(TARGET, () => <ActionComposer />);
 
@@ -78,6 +79,15 @@ function ActionComposer() {
   });
   const selectedHistoryEntry =
     history.find((entry) => entry.id === selectedHistoryId) || null;
+  const renderedPreviewUrl = buildRenderedPreviewUrl({
+    customerEmail,
+    emailType,
+    firstName,
+    orderNumber,
+    products,
+    shipDate,
+    sku,
+  });
 
   if (launchMode === "history_email") {
     return (
@@ -240,6 +250,14 @@ function ActionComposer() {
         />
 
         <InlineStack inlineAlignment="start" gap="base">
+          <Button
+            href={renderedPreviewUrl}
+            target="_blank"
+            variant="secondary"
+          >
+            Rendered preview
+          </Button>
+
           <Button onPress={resetComposer} variant="secondary">
             Reset defaults
           </Button>
@@ -579,4 +597,26 @@ function buildEmailPreviewParagraphs(message) {
         .join(" "),
     )
     .filter(Boolean);
+}
+
+function buildRenderedPreviewUrl({
+  customerEmail,
+  emailType,
+  firstName,
+  orderNumber,
+  products,
+  shipDate,
+  sku,
+}) {
+  const params = new URLSearchParams({
+    customerEmail: customerEmail || "",
+    emailType: emailType || "",
+    firstName: firstName || "",
+    orderNumber: orderNumber || "",
+    products: JSON.stringify(products || []),
+    shipDate: shipDate || "",
+    sku: sku || "",
+  });
+
+  return `${APP_URL}/app/notify-dock-preview?${params.toString()}`;
 }
