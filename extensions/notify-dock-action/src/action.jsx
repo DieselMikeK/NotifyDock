@@ -37,7 +37,6 @@ function ActionComposer() {
     fromAddress,
     fromOptions,
     fromOptionsLoading,
-    fromOptionsNotice,
     handleSend,
     history,
     historyExpanded,
@@ -229,8 +228,6 @@ function ActionComposer() {
         {error ? <Banner tone="critical">{error}</Banner> : null}
 
         {status ? <Banner tone={status.tone}>{status.message}</Banner> : null}
-
-        {fromOptionsNotice ? <Banner tone="warning">{fromOptionsNotice}</Banner> : null}
 
         <InlineStack inlineAlignment="space-between">
           <Box inlineSize="48%">
