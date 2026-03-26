@@ -328,15 +328,18 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
     <BlockStack gap="none">
       {!isFirst ? (
         <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-          <HistoryTimelineConnector />
+          <HistoryTimelineConnector lines={2} />
           <Box />
         </InlineStack>
       ) : null}
 
       <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-        <HistoryTimelineDot />
+        <HistoryTimelineMarker
+          showTop={!isFirst}
+          showBottom
+        />
 
-        <Box paddingBlockEnd="small">
+        <Box>
           <InlineStack inlineAlignment="start">
             <Badge>{buildHistorySummary(entry)}</Badge>
           </InlineStack>
@@ -344,7 +347,11 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
       </InlineStack>
 
       <InlineStack blockAlignment="start" gap="base" inlineAlignment="start">
-        {!isLast ? <HistoryTimelineConnector /> : <HistoryTimelineSpacer />}
+        {!isLast ? (
+          <HistoryTimelineConnector lines={3} />
+        ) : (
+          <HistoryTimelineSpacer lines={3} />
+        )}
 
         <Box paddingBlockEnd="base">
           <InlineStack inlineAlignment="start">
@@ -356,32 +363,38 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
   );
 }
 
-function HistoryTimelineConnector() {
+function HistoryTimelineConnector({lines = 2}) {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <InlineStack inlineAlignment="center">
-        <Text>│</Text>
-      </InlineStack>
+      <BlockStack gap="none" inlineAlignment="center">
+        {Array.from({length: lines}).map((_, index) => (
+          <Text key={`history-line-${index}`}>│</Text>
+        ))}
+      </BlockStack>
     </Box>
   );
 }
 
-function HistoryTimelineDot() {
+function HistoryTimelineMarker({showTop, showBottom}) {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <InlineStack inlineAlignment="center">
+      <BlockStack gap="none" inlineAlignment="center">
+        <Text>{showTop ? "│" : " "}</Text>
         <Text>●</Text>
-      </InlineStack>
+        <Text>{showBottom ? "│" : " "}</Text>
+      </BlockStack>
     </Box>
   );
 }
 
-function HistoryTimelineSpacer() {
+function HistoryTimelineSpacer({lines = 3}) {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <InlineStack inlineAlignment="center">
-        <Text> </Text>
-      </InlineStack>
+      <BlockStack gap="none" inlineAlignment="center">
+        {Array.from({length: lines}).map((_, index) => (
+          <Text key={`history-space-${index}`}> </Text>
+        ))}
+      </BlockStack>
     </Box>
   );
 }

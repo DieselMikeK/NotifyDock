@@ -181,15 +181,18 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
     <BlockStack gap="none">
       {!isFirst ? (
         <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-          <HistoryTimelineConnector />
+          <HistoryTimelineConnector lines={2} />
           <Box />
         </InlineStack>
       ) : null}
 
       <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-        <HistoryTimelineDot />
+        <HistoryTimelineMarker
+          showTop={!isFirst}
+          showBottom={!isLast}
+        />
 
-        <Box paddingBlockEnd="small">
+        <Box>
           <InlineStack inlineAlignment="start">
             <Badge>{buildHistorySummary(entry)}</Badge>
           </InlineStack>
@@ -198,7 +201,7 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
 
       {!isLast ? (
         <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-          <HistoryTimelineConnector />
+          <HistoryTimelineConnector lines={2} />
           <Box paddingBlockEnd="small" />
         </InlineStack>
       ) : null}
@@ -206,22 +209,26 @@ function HistoryTimelineItem({entry, isFirst, isLast}) {
   );
 }
 
-function HistoryTimelineConnector() {
+function HistoryTimelineConnector({lines = 2}) {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <InlineStack inlineAlignment="center">
-        <Text>│</Text>
-      </InlineStack>
+      <BlockStack gap="none" inlineAlignment="center">
+        {Array.from({length: lines}).map((_, index) => (
+          <Text key={`history-line-${index}`}>│</Text>
+        ))}
+      </BlockStack>
     </Box>
   );
 }
 
-function HistoryTimelineDot() {
+function HistoryTimelineMarker({showTop, showBottom}) {
   return (
     <Box inlineSize={20} minInlineSize={20}>
-      <InlineStack inlineAlignment="center">
+      <BlockStack gap="none" inlineAlignment="center">
+        <Text>{showTop ? "│" : " "}</Text>
         <Text>●</Text>
-      </InlineStack>
+        <Text>{showBottom ? "│" : " "}</Text>
+      </BlockStack>
     </Box>
   );
 }
