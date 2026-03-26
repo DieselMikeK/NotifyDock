@@ -203,6 +203,12 @@ function ActionComposer() {
           <Text>No email history yet for this order.</Text>
         ) : null}
 
+        {historyExpanded ? (
+          <Box paddingBlock="large base">
+            <Divider />
+          </Box>
+        ) : null}
+
         {loadingOrder ? (
           <ProgressIndicator size="small" accessibilityLabel="Loading order details" />
         ) : null}
