@@ -43,6 +43,14 @@ async function buildHistoryEmailPreview({historyId, historyShop}) {
     throw error;
   }
 
+  if (looksLikeSavedSnapshot(historyEntry.message)) {
+    return {
+      html: sanitizeRenderedEmailHtml(historyEntry.message),
+      templateId: "",
+      title: "Saved Email Snapshot",
+    };
+  }
+
   const renderPayload = await buildNotifyDockRenderPayloadForHistory(historyEntry);
 
   if (renderPayload) {
@@ -159,4 +167,14 @@ function escapeHtml(value) {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+function looksLikeSavedSnapshot(message) {
+  const normalizedMessage = `${message || ""}`.trim().toLowerCase();
+
+  return (
+    normalizedMessage.startsWith("<!doctype html") ||
+    normalizedMessage.startsWith("<html") ||
+    normalizedMessage.includes("<body")
+  );
 }

@@ -1,8 +1,8 @@
 import {json} from "@remix-run/node";
 import {recordEmailHistory} from "../email-history.server";
 import {buildNotifyDockMessage} from "../notify-dock-email-template.server";
+import {captureNotifyDockRenderedSnapshot, sendNotifyDockEvent} from "../klaviyo.server";
 import {authenticate} from "../shopify.server";
-import {sendNotifyDockEvent} from "../klaviyo.server";
 
 const VALID_EMAIL_TYPES = new Set([
   "backorder_notice",
@@ -64,6 +64,15 @@ export async function action({request}) {
     products,
     shipDate,
   }).trim();
+  const renderPayload = {
+    customerEmail,
+    emailType,
+    firstName,
+    orderNumber,
+    products,
+    shipDate,
+    sku: resolvedSkuValue,
+  };
 
   if (!VALID_EMAIL_TYPES.has(emailType)) {
     return cors(json({error: "Invalid email type."}, {status: 400}));
@@ -112,6 +121,16 @@ export async function action({request}) {
       subject,
     });
     let historyWarning = "";
+    let renderedSnapshot = null;
+
+    try {
+      renderedSnapshot = await captureNotifyDockRenderedSnapshot(renderPayload);
+    } catch (snapshotError) {
+      historyWarning =
+        snapshotError instanceof Error
+          ? `Notify Dock sent the email event, but could not save an HTML snapshot: ${snapshotError.message}`
+          : "Notify Dock sent the email event, but could not save an HTML snapshot.";
+    }
 
     try {
       await recordEmailHistory({
@@ -119,7 +138,7 @@ export async function action({request}) {
         emailType,
         firstName,
         fromAddress,
-        message,
+        message: renderedSnapshot?.renderedHtml || message,
         metricName: result.metricName,
         orderId,
         orderNumber,
@@ -141,7 +160,7 @@ export async function action({request}) {
         ok: true,
         message:
           historyWarning
-            ? "Klaviyo accepted the Notify Dock event, but Notify Dock could not save the local history entry."
+            ? "Klaviyo accepted the Notify Dock event, but Notify Dock could not save the full local history snapshot."
             : "Klaviyo accepted the Notify Dock event. The matching Klaviyo flow will send the email.",
         historyWarning,
         metricName: result.metricName,

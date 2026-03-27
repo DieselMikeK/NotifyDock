@@ -245,6 +245,25 @@ export async function renderNotifyDockTemplate({
   };
 }
 
+export async function captureNotifyDockRenderedSnapshot(payload) {
+  const normalizedPayload = {
+    customerEmail: `${payload?.customerEmail || ""}`.trim(),
+    emailType: `${payload?.emailType || ""}`.trim(),
+    firstName: `${payload?.firstName || ""}`.trim(),
+    orderNumber: `${payload?.orderNumber || ""}`.trim(),
+    products: Array.isArray(payload?.products) ? payload.products : [],
+    shipDate: `${payload?.shipDate || ""}`.trim(),
+    sku: `${payload?.sku || ""}`.trim(),
+  };
+  const rendered = await renderNotifyDockTemplate(normalizedPayload);
+
+  return {
+    renderPayload: normalizedPayload,
+    renderedHtml: rendered.html,
+    renderedTemplateId: rendered.templateId,
+  };
+}
+
 export async function buildNotifyDockRenderPayloadForHistory(historyEntry) {
   const customerEmail = `${historyEntry?.customerEmail || ""}`.trim();
   const emailType = `${historyEntry?.emailType || ""}`.trim();
