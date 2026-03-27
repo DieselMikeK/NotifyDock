@@ -5,7 +5,7 @@ const TEMPLATE_IDS = {
   backorder_notice:
     process.env.KLAVIYO_BACKORDER_TEMPLATE_ID || "TGEPX6",
   shipping_delay:
-    process.env.KLAVIYO_SHIPPING_DELAY_TEMPLATE_ID || "",
+    process.env.KLAVIYO_SHIPPING_DELAY_TEMPLATE_ID || "S5nvBk",
   will_call_in_progress:
     process.env.KLAVIYO_WILL_CALL_IN_PROGRESS_TEMPLATE_ID || "",
   will_call_ready:
