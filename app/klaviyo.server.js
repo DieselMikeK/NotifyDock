@@ -27,6 +27,10 @@ export const METRIC_NAMES = {
     "Notify Dock Will Call Email Requested",
 };
 
+const EMAIL_TYPE_BY_METRIC_NAME = Object.fromEntries(
+  Object.entries(METRIC_NAMES).map(([emailType, metricName]) => [metricName, emailType]),
+);
+
 export async function sendNotifyDockEvent({
   customerEmail,
   emailType,
@@ -241,6 +245,62 @@ export async function renderNotifyDockTemplate({
   };
 }
 
+export async function buildNotifyDockRenderPayloadForHistory(historyEntry) {
+  const customerEmail = `${historyEntry?.customerEmail || ""}`.trim();
+  const emailType = `${historyEntry?.emailType || ""}`.trim();
+  const orderNumber = `${historyEntry?.orderNumber || ""}`.trim();
+
+  if (!customerEmail || !emailType || !orderNumber) {
+    return null;
+  }
+
+  const events = await listNotifyDockEventsForOrder({
+    customerEmail,
+    orderNumber,
+  });
+  const matchingEvents = events.filter(
+    (event) => resolveNotifyDockEventEmailType(event) === emailType,
+  );
+
+  if (!matchingEvents.length) {
+    return null;
+  }
+
+  const matchedEvent = selectHistoryEvent({
+    events: matchingEvents,
+    sentAt: historyEntry?.sentAt,
+    sourceEventId: historyEntry?.sourceEventId,
+  });
+
+  if (!matchedEvent) {
+    return null;
+  }
+
+  const eventProperties = matchedEvent.eventProperties || {};
+  const products = normalizeRenderProductsFromEvent(eventProperties);
+  const resolvedSku =
+    `${eventProperties.sku || ""}`.trim() ||
+    products
+      .map((product) => product.sku)
+      .filter(Boolean)
+      .join(", ") ||
+    `${historyEntry?.sku || ""}`.trim();
+
+  return {
+    customerEmail:
+      `${matchedEvent.profileEmail || ""}`.trim() || customerEmail,
+    emailType,
+    firstName:
+      `${matchedEvent.profileFirstName || ""}`.trim() ||
+      `${historyEntry?.firstName || ""}`.trim(),
+    orderNumber:
+      `${eventProperties.order_number || ""}`.trim() || orderNumber,
+    products,
+    shipDate: `${eventProperties.ship_date || ""}`.trim(),
+    sku: resolvedSku,
+  };
+}
+
 async function getProfileIdByEmail(email) {
   const params = new URLSearchParams({
     filter: `equals(email,"${email}")`,
@@ -334,6 +394,96 @@ function normalizeNotifyDockEvent(event, includedByType) {
     metricName: metric?.attributes?.name || "",
     profileEmail: profile?.attributes?.email || "",
     profileFirstName: profile?.attributes?.first_name || "",
+  };
+}
+
+function resolveNotifyDockEventEmailType(event) {
+  const eventProperties = event?.eventProperties || {};
+  const emailType = `${eventProperties.email_type || ""}`.trim();
+
+  if (emailType) {
+    return emailType;
+  }
+
+  return EMAIL_TYPE_BY_METRIC_NAME[event?.metricName] || "";
+}
+
+function selectHistoryEvent({events, sentAt, sourceEventId}) {
+  if (!Array.isArray(events) || !events.length) {
+    return null;
+  }
+
+  if (sourceEventId) {
+    const exactMatch = events.find((event) => event.id === sourceEventId);
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+  }
+
+  const sentAtTimestamp = new Date(sentAt).getTime();
+
+  if (!Number.isFinite(sentAtTimestamp)) {
+    return events[0];
+  }
+
+  return events.reduce((closestEvent, event) => {
+    if (!closestEvent) {
+      return event;
+    }
+
+    const closestDelta = Math.abs(
+      new Date(closestEvent.datetime).getTime() - sentAtTimestamp,
+    );
+    const currentDelta = Math.abs(
+      new Date(event.datetime).getTime() - sentAtTimestamp,
+    );
+
+    return currentDelta < closestDelta ? event : closestEvent;
+  }, null);
+}
+
+function normalizeRenderProductsFromEvent(eventProperties) {
+  const products = Array.isArray(eventProperties?.products)
+    ? eventProperties.products
+        .map((product) => normalizeRenderProduct(product))
+        .filter(Boolean)
+    : [];
+
+  if (products.length) {
+    return products;
+  }
+
+  const fallbackProduct = normalizeRenderProduct({
+    product_image_alt:
+      `${eventProperties?.product_image_alt || eventProperties?.product_title || ""}`.trim(),
+    product_image_url: eventProperties?.product_image_url,
+    product_title: eventProperties?.product_title,
+    product_variant_title: eventProperties?.product_variant_title,
+    sku: eventProperties?.sku,
+  });
+
+  return fallbackProduct ? [fallbackProduct] : [];
+}
+
+function normalizeRenderProduct(product) {
+  const sku = `${product?.sku || ""}`.trim();
+  const productTitle =
+    `${product?.product_title || product?.productTitle || ""}`.trim();
+
+  if (!sku && !productTitle) {
+    return null;
+  }
+
+  return {
+    productImageAlt:
+      `${product?.product_image_alt || product?.productImageAlt || ""}`.trim(),
+    productImageUrl:
+      `${product?.product_image_url || product?.productImageUrl || ""}`.trim(),
+    productTitle,
+    productVariantTitle:
+      `${product?.product_variant_title || product?.productVariantTitle || ""}`.trim(),
+    sku,
   };
 }
 

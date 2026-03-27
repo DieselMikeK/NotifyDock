@@ -1,5 +1,8 @@
 import {getEmailHistoryById} from "./email-history.server";
-import {renderNotifyDockTemplate} from "./klaviyo.server";
+import {
+  buildNotifyDockRenderPayloadForHistory,
+  renderNotifyDockTemplate,
+} from "./klaviyo.server";
 import {sanitizeRenderedEmailHtml} from "./notify-dock-preview-token.server";
 
 export async function buildNotifyDockPreview(payload) {
@@ -38,6 +41,18 @@ async function buildHistoryEmailPreview({historyId, historyShop}) {
     const error = new Error("This saved Notify Dock email could not be found.");
     error.status = 404;
     throw error;
+  }
+
+  const renderPayload = await buildNotifyDockRenderPayloadForHistory(historyEntry);
+
+  if (renderPayload) {
+    const rendered = await renderNotifyDockTemplate(renderPayload);
+
+    return {
+      html: sanitizeRenderedEmailHtml(rendered.html),
+      templateId: rendered.templateId,
+      title: "Rendered Klaviyo Preview",
+    };
   }
 
   return {
