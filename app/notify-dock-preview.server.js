@@ -20,6 +20,7 @@ export async function buildNotifyDockPreview(payload) {
 
   return {
     html: sanitizeRenderedEmailHtml(rendered.html),
+    sourceLabel: "Live render",
     templateId: rendered.templateId,
     title: "Rendered Klaviyo Preview",
   };
@@ -46,6 +47,7 @@ async function buildHistoryEmailPreview({historyId, historyShop}) {
   if (looksLikeSavedSnapshot(historyEntry.message)) {
     return {
       html: sanitizeRenderedEmailHtml(historyEntry.message),
+      sourceLabel: "Saved snapshot",
       templateId: "",
       title: "Saved Email Snapshot",
     };
@@ -58,6 +60,7 @@ async function buildHistoryEmailPreview({historyId, historyShop}) {
 
     return {
       html: sanitizeRenderedEmailHtml(rendered.html),
+      sourceLabel: "Live render",
       templateId: rendered.templateId,
       title: "Rendered Klaviyo Preview",
     };
@@ -65,6 +68,7 @@ async function buildHistoryEmailPreview({historyId, historyShop}) {
 
   return {
     html: buildSavedEmailPreviewHtml(historyEntry),
+    sourceLabel: "Legacy saved body",
     templateId: "",
     title: "Saved Email Preview",
   };

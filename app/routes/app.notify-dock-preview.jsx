@@ -32,6 +32,7 @@ export async function loader({request}) {
         {
           html: "",
           notice: "emailType is required.",
+          sourceLabel: "",
           templateId: "",
           title: "Rendered Klaviyo Preview",
         },
@@ -47,6 +48,7 @@ export async function loader({request}) {
       {
         html: rendered.html,
         notice: "",
+        sourceLabel: rendered.sourceLabel || "",
         templateId: rendered.templateId,
         title: rendered.title,
       },
@@ -59,6 +61,7 @@ export async function loader({request}) {
           error instanceof Error
             ? error.message
             : "Notify Dock could not render the Klaviyo preview.",
+        sourceLabel: "",
         templateId: "",
         title: "Rendered Klaviyo Preview",
       },
@@ -68,7 +71,7 @@ export async function loader({request}) {
 }
 
 export default function NotifyDockPreviewPage() {
-  const {html, notice, templateId, title} = useLoaderData();
+  const {html, notice, sourceLabel, templateId, title} = useLoaderData();
 
   return (
     <Page>
@@ -78,6 +81,12 @@ export default function NotifyDockPreviewPage() {
           <Card>
             <BlockStack gap="400">
               {notice ? <Banner tone="critical">{notice}</Banner> : null}
+
+              {sourceLabel ? (
+                <Text as="p" variant="bodyMd">
+                  Preview source: {sourceLabel}
+                </Text>
+              ) : null}
 
               {templateId ? (
                 <Text as="p" variant="bodyMd">

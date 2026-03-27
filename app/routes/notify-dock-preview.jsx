@@ -21,6 +21,7 @@ export async function loader({request}) {
           error instanceof Error
             ? error.message
             : "The Notify Dock preview link is invalid.",
+        sourceLabel: "",
         templateId: "",
         title: "Rendered Klaviyo Preview",
       },
@@ -34,6 +35,7 @@ export async function loader({request}) {
     return json({
       html: rendered.html,
       notice: "",
+      sourceLabel: rendered.sourceLabel || "",
       templateId: rendered.templateId,
       title: rendered.title,
     });
@@ -45,6 +47,7 @@ export async function loader({request}) {
           error instanceof Error
             ? error.message
             : "Notify Dock could not render the Klaviyo preview.",
+        sourceLabel: "",
         templateId: "",
         title: "Rendered Klaviyo Preview",
       },
@@ -54,13 +57,14 @@ export async function loader({request}) {
 }
 
 export default function NotifyDockPreviewPage() {
-  const {html, notice, templateId, title} = useLoaderData();
+  const {html, notice, sourceLabel, templateId, title} = useLoaderData();
 
   return (
     <main style={styles.page}>
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>{title || "Rendered Klaviyo Preview"}</h1>
+          {sourceLabel ? <p style={styles.meta}>Preview source: {sourceLabel}</p> : null}
           {templateId ? <p style={styles.meta}>Template ID: {templateId}</p> : null}
         </div>
       </div>

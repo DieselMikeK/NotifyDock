@@ -188,9 +188,11 @@ function ActionComposer() {
             </InlineStack>
 
             {historyExpanded ? (
-              <EmailHistoryList
-                history={history}
-              />
+              <Box maxBlockSize={1000}>
+                <EmailHistoryList
+                  history={history}
+                />
+              </Box>
             ) : null}
           </BlockStack>
         ) : null}
