@@ -2,11 +2,12 @@ import {useEffect, useState} from "react";
 import {useApi} from "@shopify/ui-extensions-react/admin";
 
 export const EMAIL_TYPES = [
-  {label: "Backorder Notice", value: "backorder_notice"},
   {label: "Shipping Delay", value: "shipping_delay"},
   {label: "Will Call - Ready", value: "will_call_ready"},
   {label: "Will Call - In Progress", value: "will_call_in_progress"},
 ];
+
+const DEFAULT_EMAIL_TYPE = "shipping_delay";
 
 const DEFAULT_FROM_OPTIONS = [
   {
@@ -42,14 +43,14 @@ export function useComposerState(target) {
   const [sku, setSku] = useState("");
   const [shipDate, setShipDate] = useState("");
   const [products, setProducts] = useState([]);
-  const [emailType, setEmailType] = useState("backorder_notice");
+  const [emailType, setEmailType] = useState(DEFAULT_EMAIL_TYPE);
   const [fromAddress, setFromAddress] = useState(DEFAULT_FROM_OPTIONS[0].value);
   const [fromOptions, setFromOptions] = useState(DEFAULT_FROM_OPTIONS);
   const [fromOptionsLoading, setFromOptionsLoading] = useState(false);
   const [fromOptionsNotice, setFromOptionsNotice] = useState("");
   const [subject, setSubject] = useState(
-    buildSubject({
-      emailType: "backorder_notice",
+      buildSubject({
+      emailType: DEFAULT_EMAIL_TYPE,
       orderNumber: "",
       shopName: "",
     }),
@@ -76,7 +77,7 @@ export function useComposerState(target) {
     setSku("");
     setShipDate("");
     setProducts([]);
-    setEmailType("backorder_notice");
+    setEmailType(DEFAULT_EMAIL_TYPE);
     setFromAddress(DEFAULT_FROM_OPTIONS[0].value);
     setFromOptions(DEFAULT_FROM_OPTIONS);
     setFromOptionsLoading(false);
