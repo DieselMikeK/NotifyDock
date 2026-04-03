@@ -132,7 +132,7 @@ export function useComposerState(target) {
         }
 
         if (result.errors?.length) {
-          setError("Unable to auto-fill order details. You can still review the template below.");
+          setError(buildOrderAutofillError(result.errors));
           setLoadingOrder(false);
           return;
         }
@@ -140,7 +140,7 @@ export function useComposerState(target) {
         setShopName(result.data?.shop?.name || "");
 
         if (!result.data?.order) {
-          setError("Unable to auto-fill order details. You can still review the template below.");
+          setError(buildMissingOrderAutofillError());
           setLoadingOrder(false);
           return;
         }
@@ -159,7 +159,7 @@ export function useComposerState(target) {
         setLoadingOrder(false);
       } catch (_loadError) {
         if (!cancelled) {
-          setError("Unable to auto-fill order details. You can still review the template below.");
+          setError(buildOrderAutofillError(_loadError));
           setLoadingOrder(false);
         }
       }
@@ -519,6 +519,46 @@ function requiresSku(emailType) {
     "will_call_ready",
     "will_call_in_progress",
   ].includes(emailType);
+}
+
+function buildOrderAutofillError(errorLike) {
+  const messages = extractGraphqlErrorMessages(errorLike);
+  const normalizedMessages = messages.join(" ").toLowerCase();
+
+  if (
+    normalizedMessages.includes("read_all_orders") ||
+    normalizedMessages.includes("60 days") ||
+    normalizedMessages.includes("60-day")
+  ) {
+    return "Unable to auto-fill order details for this older order until Shopify approves Notify Dock's updated all-orders permission. You can still review the template below.";
+  }
+
+  if (
+    normalizedMessages.includes("access denied") ||
+    normalizedMessages.includes("not authorized")
+  ) {
+    return "Unable to auto-fill order details because Shopify denied access to this order. You can still review the template below.";
+  }
+
+  return "Unable to auto-fill order details. You can still review the template below.";
+}
+
+function buildMissingOrderAutofillError() {
+  return "Unable to auto-fill order details because Shopify did not return this order. If this order is older than 60 days, approve Notify Dock's updated all-orders permission and try again. You can still review the template below.";
+}
+
+function extractGraphqlErrorMessages(errorLike) {
+  if (Array.isArray(errorLike)) {
+    return errorLike
+      .map((error) => `${error?.message || ""}`.trim())
+      .filter(Boolean);
+  }
+
+  if (errorLike instanceof Error) {
+    return [`${errorLike.message || ""}`.trim()].filter(Boolean);
+  }
+
+  return [];
 }
 
 function getLaunchUrl(launchUrl) {
