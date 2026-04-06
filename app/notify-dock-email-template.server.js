@@ -1,15 +1,19 @@
 import {formatNotifyDockShipDate} from "./ship-date";
 
+const DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE = "dynamic_shipping_delay";
+
 export function buildNotifyDockMessage({
   emailType,
   firstName,
   orderNumber,
   products = [],
   shipDate,
+  globalShipDate,
 }) {
   const resolvedProducts = Array.isArray(products) ? products.filter(Boolean) : [];
   const productMarkup = buildProductMarkup(resolvedProducts);
   const resolvedShipDate = formatNotifyDockShipDate(shipDate);
+  const resolvedGlobalShipDate = formatNotifyDockShipDate(globalShipDate || shipDate);
   const itemLabel = resolvedProducts.length === 1 ? "item" : "items";
   const referenceMarkup = buildReferenceMarkup({
     itemLabel,
@@ -53,21 +57,80 @@ export function buildNotifyDockMessage({
       `<p>The below product${resolvedProducts.length === 1 ? " is" : "s are"} currently on backorder:</p>`,
       productMarkup,
       `<p>Based upon information from the manufacturer, the current ship date is: <strong>${escapeHtml(resolvedShipDate || "Insert Ship date")}</strong></p>`,
-      "<p><strong>HANG TIGHT:</strong> If you are okay to wait, you are good to go. Once we have tracking, or any other updates, we will forward them to this same email address.</p>",
-      "<p><strong>CHECK OPTIONS:</strong> If you would like a comparable option that is on the shelf and ready to ship, our sales technicians can help.</p>",
-      "<p><strong>CANCEL:</strong> If the backorder timeline is too long, we can cancel and refund the backordered item(s).</p>",
-      "<p><strong>QUESTIONS:</strong> Reply to this email or reach out by phone or website chat, Monday through Friday from 6AM to 6PM Pacific.</p>",
+      buildShippingDelayClosingMarkup(),
+    ].join("");
+  }
+
+  if (emailType === DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE) {
+    return [
+      "<p>Thanks so much for shopping with Diesel Power Products, we really do appreciate it.</p>",
+      `<p>We wanted to inform you that the below product${resolvedProducts.length === 1 ? " is" : "s are"} currently experiencing a shipping delay.</p>`,
+      buildDynamicShippingDelayDetailsHtml({
+        globalShipDate: resolvedGlobalShipDate,
+        products: resolvedProducts,
+      }),
+      buildShippingDelayClosingMarkup(),
     ].join("");
   }
 
   return [
     productMarkup,
     `<p>Based upon information from the manufacturer, the current ship date of your part(s) is: <strong>${escapeHtml(resolvedShipDate || "Insert Ship date")}</strong></p>`,
+    buildShippingDelayClosingMarkup(),
+  ].join("");
+}
+
+export function buildDynamicShippingDelayDetailsHtml({
+  globalShipDate,
+  products = [],
+}) {
+  const resolvedProducts = Array.isArray(products) ? products.filter(Boolean) : [];
+
+  if (!resolvedProducts.length) {
+    return "<p><strong>Product (SKU)</strong></p>";
+  }
+
+  if (globalShipDate) {
+    return [
+      buildProductMarkup(resolvedProducts),
+      `<p>Based on information that we have received from the manufacturer, the current ship date of your part(s) is: <strong>${escapeHtml(globalShipDate)}</strong></p>`,
+    ].join("");
+  }
+
+  return resolvedProducts
+    .map((product) => {
+      const resolvedDelayDate = formatNotifyDockShipDate(product.delayDate);
+
+      return [
+        buildProductMarkup([product]),
+        `<p>${buildDynamicDelayStatusText({
+          delayDate: resolvedDelayDate,
+          delayState: product.delayState,
+        })}</p>`,
+      ].join("");
+    })
+    .join("");
+}
+
+function buildShippingDelayClosingMarkup() {
+  return [
     "<p><strong>HANG TIGHT:</strong> If you are okay to wait, you are good to go. Once we have tracking, or any other updates, we will forward them to this same email address.</p>",
     "<p><strong>CHECK OPTIONS:</strong> If you would like a comparable option that is on the shelf and ready to ship, our sales technicians can help.</p>",
     "<p><strong>CANCEL:</strong> If the backorder timeline is too long, we can cancel and refund the backordered item(s).</p>",
     "<p><strong>QUESTIONS:</strong> Reply to this email or reach out by phone or website chat, Monday through Friday from 6AM to 6PM Pacific.</p>",
   ].join("");
+}
+
+function buildDynamicDelayStatusText({delayDate, delayState}) {
+  if (delayState === "specific_date") {
+    return `Based on information that we have received from the manufacturer, the current ship date of your part(s) is: <strong>${escapeHtml(delayDate || "Insert Ship date")}</strong>`;
+  }
+
+  if (delayState === "business_days_12_15") {
+    return "Based on information that we have received from the manufacturer, the current ship date of your part(s) is 12-15 business days.";
+  }
+
+  return "Based on information that we have received from the manufacturer, there is not yet a confirmed ship date for this item.";
 }
 
 function buildProductMarkup(products) {

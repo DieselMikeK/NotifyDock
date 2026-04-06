@@ -1,14 +1,16 @@
 import {useEffect, useState} from "react";
 import {useApi} from "@shopify/ui-extensions-react/admin";
 
+export const DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE = "dynamic_shipping_delay";
+
 export const EMAIL_TYPES = [
-  {label: "Shipping Delay", value: "shipping_delay"},
+  {label: "Dynamic Shipping Delay", value: DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE},
   {label: "Will Call - In Progress", value: "will_call_in_progress"},
   {label: "Will Call - Partially Ready", value: "will_call_partially_ready"},
   {label: "Will Call - Ready", value: "will_call_ready"},
 ];
 
-const DEFAULT_EMAIL_TYPE = "shipping_delay";
+const DEFAULT_EMAIL_TYPE = DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE;
 
 const DEFAULT_FROM_OPTIONS = [
   {
@@ -333,12 +335,25 @@ export function useComposerState(target) {
     setStatus(null);
   }
 
-  async function handleSend() {
-    const selectedProducts = requiresSku(emailType) ? products : [];
+  async function handleSend(options = {}) {
+    const dynamicGlobalShipDate = `${options?.globalShipDate || ""}`.trim();
+    const dynamicProductDelayDetails = Array.isArray(options?.productDelayDetails)
+      ? options.productDelayDetails
+      : [];
+    const selectedProducts = requiresSku(emailType)
+      ? attachDynamicDelayDetails({
+          delayDetails: dynamicProductDelayDetails,
+          emailType,
+          products,
+        })
+      : [];
     const primaryProduct = selectedProducts[0] || null;
     const resolvedSku = requiresSku(emailType)
       ? selectedProducts.map((product) => product.sku).filter(Boolean).join(", ") || sku
       : "";
+    const resolvedShipDate = isDynamicShippingDelay(emailType)
+      ? dynamicGlobalShipDate
+      : shipDate;
 
     setSending(true);
     setStatus(null);
@@ -361,7 +376,8 @@ export function useComposerState(target) {
           product_title: primaryProduct?.productTitle || "",
           product_variant_title: primaryProduct?.productVariantTitle || "",
           products: selectedProducts.map((product) => serializeProductPayload(product)),
-          ship_date: shipDate,
+          global_ship_date: dynamicGlobalShipDate,
+          ship_date: resolvedShipDate,
           shop_name: shopName,
           sku: resolvedSku,
           subject,
@@ -503,7 +519,10 @@ function buildSubject({emailType, orderNumber, shopName}) {
     return "Hang Tight - Your Will Call Order Is In Progress";
   }
 
-  if (emailType === "shipping_delay") {
+  if (
+    emailType === "shipping_delay" ||
+    emailType === DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE
+  ) {
     return `Shipping delay for order ${orderNumber || "#"}`.trim();
   }
 
@@ -630,6 +649,8 @@ function normalizeFetchedProduct(product) {
 
 function serializeProductPayload(product) {
   return {
+    delay_date: product.delayDate || "",
+    delay_state: product.delayState || "",
     product_image_alt: product.productImageAlt || "",
     product_image_url: product.productImageUrl || "",
     product_title: product.productTitle || "",
@@ -644,4 +665,41 @@ function buildMissingSkuMessage(missingSkus) {
   }
 
   return `No Shopify product matched SKU${missingSkus.length > 1 ? "s" : ""}: ${missingSkus.join(", ")}.`;
+}
+
+function isDynamicShippingDelay(emailType) {
+  return emailType === DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE;
+}
+
+function attachDynamicDelayDetails({delayDetails, emailType, products}) {
+  if (!isDynamicShippingDelay(emailType) || !Array.isArray(products)) {
+    return Array.isArray(products) ? products : [];
+  }
+
+  const detailsBySku = new Map(
+    delayDetails
+      .map((detail) => [
+        `${detail?.sku || ""}`.trim(),
+        {
+          delayDate: `${detail?.delayDate || ""}`.trim(),
+          delayState: `${detail?.delayState || ""}`.trim(),
+        },
+      ])
+      .filter(([sku]) => sku),
+  );
+
+  return products.map((product) => {
+    const sku = `${product?.sku || ""}`.trim();
+    const detail = detailsBySku.get(sku);
+
+    if (!detail) {
+      return product;
+    }
+
+    return {
+      ...product,
+      delayDate: detail.delayDate,
+      delayState: detail.delayState,
+    };
+  });
 }

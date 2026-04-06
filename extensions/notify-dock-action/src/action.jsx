@@ -18,6 +18,7 @@ import {
 import {useEffect, useState} from "react";
 import {
   canSendComposer,
+  DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE,
   EMAIL_TYPES,
   useComposerState,
 } from "./composer.jsx";
@@ -61,24 +62,51 @@ function ActionComposer() {
     subject,
   } = useComposerState(TARGET);
 
-  const canSend = canSendComposer({
-    customerEmail,
-    emailType,
-    fromAddress,
-    loadingOrder,
-    loadingProduct,
-    lookupError,
-    products,
-    shipDate,
-    sku,
-    subject,
-  });
   const selectedHistoryEntry =
     history.find((entry) => entry.id === selectedHistoryId) || null;
   const previewProducts = buildPreviewProducts(emailType, products, sku);
+  const [dynamicGlobalShipDate, setDynamicGlobalShipDate] = useState("");
+  const [dynamicDelayDetails, setDynamicDelayDetails] = useState([]);
   const [renderedPreviewError, setRenderedPreviewError] = useState("");
   const [renderedPreviewLoading, setRenderedPreviewLoading] = useState(false);
   const [renderedPreviewHref, setRenderedPreviewHref] = useState("");
+  const canSend =
+    canSendComposer({
+      customerEmail,
+      emailType,
+      fromAddress,
+      loadingOrder,
+      loadingProduct,
+      lookupError,
+      products,
+      shipDate,
+      sku,
+      subject,
+    }) &&
+    isDynamicShippingDelayReady({
+      dynamicDelayDetails,
+      emailType,
+      globalShipDate: dynamicGlobalShipDate,
+      products,
+    });
+
+  useEffect(() => {
+    if (!isDynamicShippingDelay(emailType)) {
+      setDynamicGlobalShipDate("");
+      setDynamicDelayDetails([]);
+      return;
+    }
+
+    if (!products.length) {
+      setDynamicGlobalShipDate("");
+      setDynamicDelayDetails([]);
+      return;
+    }
+
+    setDynamicDelayDetails((current) =>
+      synchronizeDynamicDelayDetails(current, products),
+    );
+  }, [emailType, products]);
 
   useEffect(() => {
     let cancelled = false;
@@ -86,9 +114,18 @@ function ActionComposer() {
       customerEmail,
       emailType,
       firstName,
+      globalShipDate: dynamicGlobalShipDate,
       orderNumber,
-      products,
-      shipDate,
+      products: decoratePreviewProducts({
+        dynamicDelayDetails,
+        emailType,
+        products,
+      }),
+      shipDate: resolveRenderedPreviewShipDate({
+        emailType,
+        globalShipDate: dynamicGlobalShipDate,
+        shipDate,
+      }),
       sku,
     });
 
@@ -133,7 +170,17 @@ function ActionComposer() {
       cancelled = true;
       clearTimeout(timeoutId);
     };
-  }, [customerEmail, emailType, firstName, orderNumber, products, shipDate, sku]);
+  }, [
+    customerEmail,
+    dynamicDelayDetails,
+    dynamicGlobalShipDate,
+    emailType,
+    firstName,
+    orderNumber,
+    products,
+    shipDate,
+    sku,
+  ]);
 
   if (launchMode === "history_email") {
     return (
@@ -163,7 +210,12 @@ function ActionComposer() {
       primaryAction={
         <Button
           disabled={!canSend || sending}
-          onPress={handleSend}
+          onPress={() =>
+            handleSend({
+              globalShipDate: dynamicGlobalShipDate,
+              productDelayDetails: dynamicDelayDetails,
+            })
+          }
           variant="primary"
         >
           {sending ? "Sending..." : "Send email"}
@@ -259,16 +311,18 @@ function ActionComposer() {
         </InlineStack>
 
         <InlineStack inlineAlignment="space-between">
-          <Box inlineSize="48%">
-            <DateField
-              disabled={!showsShipDate(emailType)}
-              label="Ship date"
-              value={shipDate}
-              onChange={setShipDate}
-            />
-          </Box>
+          {!isDynamicShippingDelay(emailType) ? (
+            <Box inlineSize="48%">
+              <DateField
+                disabled={!showsShipDate(emailType)}
+                label="Ship date"
+                value={shipDate}
+                onChange={setShipDate}
+              />
+            </Box>
+          ) : null}
 
-          <Box inlineSize="48%">
+          <Box inlineSize={isDynamicShippingDelay(emailType) ? "100%" : "48%"}>
             <TextField
               disabled={!showsSku(emailType)}
               label="SKU"
@@ -284,11 +338,45 @@ function ActionComposer() {
 
         {showsSku(emailType) && lookupError ? <Banner tone="warning">{lookupError}</Banner> : null}
 
+        {isDynamicShippingDelay(emailType) ? (
+          <Banner tone="info">
+            Dynamic Shipping Delay draft: the item-level delay logic is wired in, and you still need to provide the final copy for each condition before we lock the template content.
+          </Banner>
+        ) : null}
+
         {renderedPreviewError ? (
           <Banner tone="warning">{renderedPreviewError}</Banner>
         ) : null}
 
-        {previewProducts.length ? <ProductPreviewList products={previewProducts} /> : null}
+        {previewProducts.length ? (
+          <ProductPreviewList
+            dynamicDelayDetails={dynamicDelayDetails}
+            dynamicGlobalShipDate={dynamicGlobalShipDate}
+            emailType={emailType}
+            onClearDynamicGlobalShipDate={() => {
+              setDynamicGlobalShipDate("");
+            }}
+            onDynamicDelayDateChange={(sku, value) => {
+              setDynamicDelayDetails((current) =>
+                updateDynamicDelayDetail(current, sku, {delayDate: value}),
+              );
+            }}
+            onDynamicDelayStateChange={(sku, value) => {
+              setDynamicDelayDetails((current) =>
+                updateDynamicDelayDetail(current, sku, {
+                  delayDate: value === "specific_date"
+                    ? getExistingDynamicDelayDate(current, sku)
+                    : "",
+                  delayState: value,
+                }),
+              );
+            }}
+            onDynamicGlobalShipDateChange={(value) => {
+              setDynamicGlobalShipDate(value);
+            }}
+            products={previewProducts}
+          />
+        ) : null}
 
         <InlineStack inlineAlignment="start" gap="base">
           {renderedPreviewHref ? (
@@ -468,50 +556,152 @@ function HistoryPreviewButton({entry}) {
   );
 }
 
-function ProductPreviewList({products}) {
+function ProductPreviewList({
+  dynamicDelayDetails,
+  dynamicGlobalShipDate,
+  emailType,
+  onClearDynamicGlobalShipDate,
+  onDynamicDelayDateChange,
+  onDynamicDelayStateChange,
+  onDynamicGlobalShipDateChange,
+  products,
+}) {
+  const dynamicDelayLookup = new Map(
+    dynamicDelayDetails.map((detail) => [`${detail?.sku || ""}`.trim(), detail]),
+  );
+  const globalDelayActive =
+    isDynamicShippingDelay(emailType) && Boolean(dynamicGlobalShipDate);
+  const hasConfiguredPerItemDelay = dynamicDelayDetails.some(
+    (detail) => detail.delayState || detail.delayDate,
+  );
+
   return (
     <BlockStack gap="base">
+      {isDynamicShippingDelay(emailType) && hasResolvedDynamicProducts(products) ? (
+        <Box padding="base">
+          <BlockStack gap="small">
+            <Text fontWeight="bold">Global ship date</Text>
+            <Text>
+              Set one shared date for every listed SKU. Item-level delay controls stay disabled while a global date is set.
+            </Text>
+
+            <InlineStack inlineAlignment="space-between">
+              <Box inlineSize="72%">
+                <DateField
+                  disabled={hasConfiguredPerItemDelay && !dynamicGlobalShipDate}
+                  label="Global ship date"
+                  value={dynamicGlobalShipDate}
+                  onChange={onDynamicGlobalShipDateChange}
+                />
+              </Box>
+
+              <Box inlineSize="24%">
+                <Button
+                  disabled={!dynamicGlobalShipDate}
+                  onPress={onClearDynamicGlobalShipDate}
+                  variant="secondary"
+                >
+                  Clear
+                </Button>
+              </Box>
+            </InlineStack>
+
+            {hasConfiguredPerItemDelay && !dynamicGlobalShipDate ? (
+              <Text>Clear item-level delay selections to use one shared date for all SKUs.</Text>
+            ) : null}
+          </BlockStack>
+        </Box>
+      ) : null}
+
       {products.map((product, index) => (
         <BlockStack key={`${product.sku || "sku"}-${index}`} gap="base">
           <Box padding="base">
-            <InlineStack blockAlignment="start" gap="base" inlineAlignment="start">
-              <Box
-                blockSize={120}
-                inlineSize={120}
-                maxInlineSize={120}
-                minInlineSize={120}
-              >
-                {product.productImageUrl ? (
-                  <Image
-                    source={product.productImageUrl}
-                    accessibilityLabel={
-                      product.productImageAlt || buildProductTitle(product)
-                    }
-                  />
-                ) : (
-                  <Box blockSize={120} inlineSize={120} padding="base">
-                    <Text>No image</Text>
-                  </Box>
-                )}
-              </Box>
+            <BlockStack gap="base">
+              <InlineStack blockAlignment="start" gap="base" inlineAlignment="start">
+                <Box
+                  blockSize={120}
+                  inlineSize={120}
+                  maxInlineSize={120}
+                  minInlineSize={120}
+                >
+                  {product.productImageUrl ? (
+                    <Image
+                      source={product.productImageUrl}
+                      accessibilityLabel={
+                        product.productImageAlt || buildProductTitle(product)
+                      }
+                    />
+                  ) : (
+                    <Box blockSize={120} inlineSize={120} padding="base">
+                      <Text>No image</Text>
+                    </Box>
+                  )}
+                </Box>
 
-              <Box inlineSize="60%">
-                <BlockStack gap="small">
-                  <Text fontWeight="bold">{buildProductTitle(product)}</Text>
+                <Box inlineSize="60%">
+                  <BlockStack gap="small">
+                    <Text fontWeight="bold">{buildProductTitle(product)}</Text>
 
-                  {buildProductVariantTitle(product) ? (
-                    <Text>{buildProductVariantTitle(product)}</Text>
-                  ) : null}
+                    {buildProductVariantTitle(product) ? (
+                      <Text>{buildProductVariantTitle(product)}</Text>
+                    ) : null}
 
-                  <Text>SKU: {product.sku || "{{ item.sku }}"}</Text>
-                </BlockStack>
-              </Box>
-            </InlineStack>
+                    <Text>SKU: {product.sku || "{{ item.sku }}"}</Text>
+                  </BlockStack>
+                </Box>
+              </InlineStack>
+
+              {isDynamicShippingDelay(emailType) && !product.isPlaceholder ? (
+                <DynamicDelayEditor
+                  detail={dynamicDelayLookup.get(product.sku) || EMPTY_DYNAMIC_DELAY_DETAIL}
+                  disabled={globalDelayActive}
+                  onDelayDateChange={(value) => {
+                    onDynamicDelayDateChange(product.sku, value);
+                  }}
+                  onDelayStateChange={(value) => {
+                    onDynamicDelayStateChange(product.sku, value);
+                  }}
+                />
+              ) : null}
+            </BlockStack>
           </Box>
 
           {index < products.length - 1 ? <Divider /> : null}
         </BlockStack>
       ))}
+    </BlockStack>
+  );
+}
+
+function DynamicDelayEditor({
+  detail,
+  disabled,
+  onDelayDateChange,
+  onDelayStateChange,
+}) {
+  return (
+    <BlockStack gap="small">
+      <Select
+        disabled={disabled}
+        label="Delay update"
+        options={DYNAMIC_DELAY_STATE_OPTIONS}
+        placeholder="Choose the update for this SKU"
+        value={detail.delayState || ""}
+        onChange={onDelayStateChange}
+      />
+
+      {detail.delayState === "specific_date" ? (
+        <DateField
+          disabled={disabled}
+          label="Item ship date"
+          value={detail.delayDate || ""}
+          onChange={onDelayDateChange}
+        />
+      ) : null}
+
+      {disabled ? (
+        <Text>Using the shared global ship date for every listed SKU.</Text>
+      ) : null}
     </BlockStack>
   );
 }
@@ -551,6 +741,10 @@ function labelEmailType(emailType) {
 
   if (emailType === "shipping_delay") {
     return "Shipping Delay";
+  }
+
+  if (emailType === DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE) {
+    return "Dynamic Shipping Delay";
   }
 
   return "Backorder Notice";
@@ -597,7 +791,10 @@ function buildPreviewProducts(emailType, products, sku) {
   }
 
   if (products.length) {
-    return products;
+    return products.map((product) => ({
+      ...product,
+      isPlaceholder: false,
+    }));
   }
 
   const requestedSkus = splitSkuInput(sku);
@@ -607,6 +804,7 @@ function buildPreviewProducts(emailType, products, sku) {
   }
 
   return requestedSkus.map((requestedSku) => ({
+    isPlaceholder: true,
     productImageAlt: "",
     productImageUrl: "",
     productTitle: "{{ item.product_title }}",
@@ -666,6 +864,7 @@ function buildRenderedPreviewPayload({
   customerEmail,
   emailType,
   firstName,
+  globalShipDate,
   orderNumber,
   products,
   shipDate,
@@ -675,11 +874,141 @@ function buildRenderedPreviewPayload({
     customerEmail: customerEmail || "",
     emailType: emailType || "",
     firstName: firstName || "",
+    globalShipDate: globalShipDate || "",
     orderNumber: orderNumber || "",
     products: showsSku(emailType) ? products || [] : [],
     shipDate: shipDate || "",
     sku: showsSku(emailType) ? sku || "" : "",
   };
+}
+
+const DYNAMIC_DELAY_STATE_OPTIONS = [
+  {label: "Specific date", value: "specific_date"},
+  {label: "12-15 business days", value: "business_days_12_15"},
+  {label: "No date yet", value: "no_date_yet"},
+];
+
+const EMPTY_DYNAMIC_DELAY_DETAIL = {
+  delayDate: "",
+  delayState: "",
+};
+
+function isDynamicShippingDelay(emailType) {
+  return emailType === DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE;
+}
+
+function synchronizeDynamicDelayDetails(currentDetails, products) {
+  const currentBySku = new Map(
+    currentDetails.map((detail) => [`${detail?.sku || ""}`.trim(), detail]),
+  );
+
+  return products.map((product) => {
+    const sku = `${product?.sku || ""}`.trim();
+    const currentDetail = currentBySku.get(sku);
+
+    return {
+      delayDate: `${currentDetail?.delayDate || ""}`.trim(),
+      delayState: `${currentDetail?.delayState || ""}`.trim(),
+      sku,
+    };
+  });
+}
+
+function updateDynamicDelayDetail(currentDetails, sku, updates) {
+  return currentDetails.map((detail) => {
+    if (`${detail?.sku || ""}`.trim() !== `${sku || ""}`.trim()) {
+      return detail;
+    }
+
+    return {
+      ...detail,
+      ...updates,
+    };
+  });
+}
+
+function getExistingDynamicDelayDate(currentDetails, sku) {
+  return (
+    currentDetails.find(
+      (detail) => `${detail?.sku || ""}`.trim() === `${sku || ""}`.trim(),
+    )?.delayDate || ""
+  );
+}
+
+function decoratePreviewProducts({dynamicDelayDetails, emailType, products}) {
+  if (!isDynamicShippingDelay(emailType) || !Array.isArray(products)) {
+    return Array.isArray(products) ? products : [];
+  }
+
+  const detailsBySku = new Map(
+    dynamicDelayDetails.map((detail) => [
+      `${detail?.sku || ""}`.trim(),
+      {
+        delayDate: `${detail?.delayDate || ""}`.trim(),
+        delayState: `${detail?.delayState || ""}`.trim(),
+      },
+    ]),
+  );
+
+  return products.map((product) => {
+    const detail = detailsBySku.get(`${product?.sku || ""}`.trim());
+
+    if (!detail) {
+      return product;
+    }
+
+    return {
+      ...product,
+      delayDate: detail.delayDate,
+      delayState: detail.delayState,
+    };
+  });
+}
+
+function resolveRenderedPreviewShipDate({emailType, globalShipDate, shipDate}) {
+  if (isDynamicShippingDelay(emailType)) {
+    return globalShipDate || "";
+  }
+
+  return shipDate || "";
+}
+
+function hasResolvedDynamicProducts(products) {
+  return products.some((product) => !product?.isPlaceholder);
+}
+
+function isDynamicShippingDelayReady({
+  dynamicDelayDetails,
+  emailType,
+  globalShipDate,
+  products,
+}) {
+  if (!isDynamicShippingDelay(emailType)) {
+    return true;
+  }
+
+  if (!Array.isArray(products) || !products.length) {
+    return false;
+  }
+
+  if (`${globalShipDate || ""}`.trim()) {
+    return true;
+  }
+
+  return dynamicDelayDetails.length === products.length &&
+    dynamicDelayDetails.every((detail) => {
+      const delayState = `${detail?.delayState || ""}`.trim();
+
+      if (!delayState) {
+        return false;
+      }
+
+      if (delayState !== "specific_date") {
+        return true;
+      }
+
+      return Boolean(`${detail?.delayDate || ""}`.trim());
+    });
 }
 
 async function requestPreviewHref(payload) {

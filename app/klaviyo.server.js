@@ -1,3 +1,6 @@
+import {
+  buildDynamicShippingDelayDetailsHtml,
+} from "./notify-dock-email-template.server";
 import {formatNotifyDockShipDate} from "./ship-date";
 
 const KLAVIYO_API_URL = "https://a.klaviyo.com/api/events/";
@@ -7,6 +10,10 @@ const KLAVIYO_API_REVISION = process.env.KLAVIYO_API_REVISION || "2024-07-15";
 const TEMPLATE_IDS = {
   backorder_notice:
     process.env.KLAVIYO_BACKORDER_TEMPLATE_ID || "TGEPX6",
+  dynamic_shipping_delay:
+    process.env.KLAVIYO_DYNAMIC_SHIPPING_DELAY_TEMPLATE_ID ||
+    process.env.KLAVIYO_SHIPPING_DELAY_TEMPLATE_ID ||
+    "RsmiyA",
   shipping_delay:
     process.env.KLAVIYO_SHIPPING_DELAY_TEMPLATE_ID || "RsmiyA",
   will_call_partially_ready:
@@ -22,6 +29,9 @@ export const METRIC_NAMES = {
   backorder_notice:
     process.env.KLAVIYO_BACKORDER_METRIC_NAME ||
     "Notify Dock Backorder Email Requested",
+  dynamic_shipping_delay:
+    process.env.KLAVIYO_DYNAMIC_SHIPPING_DELAY_METRIC_NAME ||
+    "Notify Dock Dynamic Shipping Delay Email Requested",
   shipping_delay:
     process.env.KLAVIYO_SHIPPING_DELAY_METRIC_NAME ||
     "Notify Dock Shipping Delay Email Requested",
@@ -45,6 +55,7 @@ export async function sendNotifyDockEvent({
   emailType,
   firstName,
   fromAddress,
+  globalShipDate,
   message,
   orderId,
   orderNumber,
@@ -60,6 +71,23 @@ export async function sendNotifyDockEvent({
 }) {
   const privateApiKey = process.env.KLAVIYO_PRIVATE_API_KEY;
   const formattedShipDate = formatNotifyDockShipDate(shipDate);
+  const formattedGlobalShipDate = formatNotifyDockShipDate(globalShipDate);
+  const normalizedProducts = products.map((product) =>
+    normalizeKlaviyoProduct(product),
+  );
+  const delayMode =
+    emailType === "dynamic_shipping_delay"
+      ? formattedGlobalShipDate
+        ? "global_date"
+        : "per_item"
+      : "";
+  const delayDetailsHtml =
+    emailType === "dynamic_shipping_delay"
+      ? buildDynamicShippingDelayDetailsHtml({
+          globalShipDate: formattedGlobalShipDate,
+          products: normalizedProducts,
+        })
+      : "";
 
   if (!privateApiKey) {
     const error = new Error(
@@ -92,13 +120,18 @@ export async function sendNotifyDockEvent({
           properties: {
             email_type: emailType,
             from_address: fromAddress,
+            global_ship_date: formattedGlobalShipDate,
+            delay_details_html: delayDetailsHtml,
+            delay_mode: delayMode,
             message_html: message,
             order_id: orderId,
             order_number: orderNumber,
             product_image_url: productImageUrl,
             product_title: productTitle,
             product_variant_title: productVariantTitle,
-            products: products.map((product) => ({
+            products: normalizedProducts.map((product) => ({
+              delay_date: product.delayDate,
+              delay_state: product.delayState,
               product_image_alt: product.productImageAlt,
               product_image_url: product.productImageUrl,
               product_title: product.productTitle,
@@ -106,7 +139,10 @@ export async function sendNotifyDockEvent({
               sku: product.sku,
             })),
             sent_by_email: sentByEmail,
-            ship_date: formattedShipDate,
+            ship_date:
+              emailType === "dynamic_shipping_delay"
+                ? formattedGlobalShipDate
+                : formattedShipDate,
             shop,
             sku,
             subject,
@@ -188,6 +224,7 @@ export async function renderNotifyDockTemplate({
   customerEmail,
   emailType,
   firstName,
+  globalShipDate,
   orderNumber,
   products = [],
   shipDate,
@@ -195,6 +232,17 @@ export async function renderNotifyDockTemplate({
 }) {
   const templateId = TEMPLATE_IDS[emailType];
   const formattedShipDate = formatNotifyDockShipDate(shipDate);
+  const formattedGlobalShipDate = formatNotifyDockShipDate(globalShipDate);
+  const normalizedProducts = products.map((product) =>
+    normalizeKlaviyoProduct(product),
+  );
+  const delayDetailsHtml =
+    emailType === "dynamic_shipping_delay"
+      ? buildDynamicShippingDelayDetailsHtml({
+          globalShipDate: formattedGlobalShipDate,
+          products: normalizedProducts,
+        })
+      : "";
 
   if (!templateId) {
     const error = new Error(
@@ -213,17 +261,30 @@ export async function renderNotifyDockTemplate({
         attributes: {
           context: {
             event: {
-              product_image_url: products[0]?.productImageUrl || "",
-              product_title: products[0]?.productTitle || "",
-              product_variant_title: products[0]?.productVariantTitle || "",
-              products: products.map((product) => ({
+              product_image_url: normalizedProducts[0]?.productImageUrl || "",
+              product_title: normalizedProducts[0]?.productTitle || "",
+              product_variant_title: normalizedProducts[0]?.productVariantTitle || "",
+              products: normalizedProducts.map((product) => ({
+                delay_date: product.delayDate,
+                delay_state: product.delayState,
                 product_image_alt: product.productImageAlt,
                 product_image_url: product.productImageUrl,
                 product_title: product.productTitle,
                 product_variant_title: product.productVariantTitle,
                 sku: product.sku,
               })),
-              ship_date: formattedShipDate,
+              global_ship_date: formattedGlobalShipDate,
+              delay_details_html: delayDetailsHtml,
+              delay_mode:
+                emailType === "dynamic_shipping_delay"
+                  ? formattedGlobalShipDate
+                    ? "global_date"
+                    : "per_item"
+                  : "",
+              ship_date:
+                emailType === "dynamic_shipping_delay"
+                  ? formattedGlobalShipDate
+                  : formattedShipDate,
               sku,
             },
             profile: {
@@ -261,6 +322,7 @@ export async function captureNotifyDockRenderedSnapshot(payload) {
     customerEmail: `${payload?.customerEmail || ""}`.trim(),
     emailType: `${payload?.emailType || ""}`.trim(),
     firstName: `${payload?.firstName || ""}`.trim(),
+    globalShipDate: `${payload?.globalShipDate || ""}`.trim(),
     orderNumber: `${payload?.orderNumber || ""}`.trim(),
     products: Array.isArray(payload?.products) ? payload.products : [],
     shipDate: `${payload?.shipDate || ""}`.trim(),
@@ -323,6 +385,7 @@ export async function buildNotifyDockRenderPayloadForHistory(historyEntry) {
     firstName:
       `${matchedEvent.profileFirstName || ""}`.trim() ||
       `${historyEntry?.firstName || ""}`.trim(),
+    globalShipDate: `${eventProperties.global_ship_date || ""}`.trim(),
     orderNumber:
       `${eventProperties.order_number || ""}`.trim() || orderNumber,
     products,
@@ -506,6 +569,10 @@ function normalizeRenderProduct(product) {
   }
 
   return {
+    delayDate:
+      `${product?.delay_date || product?.delayDate || ""}`.trim(),
+    delayState:
+      `${product?.delay_state || product?.delayState || ""}`.trim(),
     productImageAlt:
       `${product?.product_image_alt || product?.productImageAlt || ""}`.trim(),
     productImageUrl:
@@ -514,6 +581,18 @@ function normalizeRenderProduct(product) {
     productVariantTitle:
       `${product?.product_variant_title || product?.productVariantTitle || ""}`.trim(),
     sku,
+  };
+}
+
+function normalizeKlaviyoProduct(product) {
+  return {
+    delayDate: `${product?.delayDate || ""}`.trim(),
+    delayState: `${product?.delayState || ""}`.trim(),
+    productImageAlt: `${product?.productImageAlt || ""}`.trim(),
+    productImageUrl: `${product?.productImageUrl || ""}`.trim(),
+    productTitle: `${product?.productTitle || ""}`.trim(),
+    productVariantTitle: `${product?.productVariantTitle || ""}`.trim(),
+    sku: `${product?.sku || ""}`.trim(),
   };
 }
 

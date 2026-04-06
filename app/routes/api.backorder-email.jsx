@@ -6,6 +6,7 @@ import {authenticate} from "../shopify.server";
 
 const VALID_EMAIL_TYPES = new Set([
   "backorder_notice",
+  "dynamic_shipping_delay",
   "shipping_delay",
   "will_call_partially_ready",
   "will_call_in_progress",
@@ -37,6 +38,7 @@ export async function action({request}) {
   const orderId = `${payload?.order_id || ""}`.trim();
   const sku = `${payload?.sku || ""}`.trim();
   const shipDate = `${payload?.ship_date || ""}`.trim();
+  const globalShipDate = `${payload?.global_ship_date || ""}`.trim();
   const orderNumber = `${payload?.order_number || ""}`.trim();
   const firstName = `${payload?.first_name || ""}`.trim();
   const customerEmail = `${payload?.customer_email || ""}`.trim();
@@ -64,6 +66,7 @@ export async function action({request}) {
   const message = buildNotifyDockMessage({
     emailType,
     firstName,
+    globalShipDate,
     orderNumber,
     products: resolvedProducts,
     shipDate,
@@ -72,6 +75,7 @@ export async function action({request}) {
     customerEmail,
     emailType,
     firstName,
+    globalShipDate,
     orderNumber,
     products: resolvedProducts,
     shipDate,
@@ -89,6 +93,7 @@ export async function action({request}) {
     !subject ||
     !isPayloadAllowed({
       emailType,
+      globalShipDate,
       primaryProduct,
       products: resolvedProducts,
       requestedSkus,
@@ -99,7 +104,7 @@ export async function action({request}) {
       json(
         {
           error:
-            "Order, customer email, order number, and subject are required. Ship date is required for shipping-delay emails, and every comma-separated SKU must resolve to a product title for email types that use SKU.",
+            "Order, customer email, order number, and subject are required. Ship date is required for legacy shipping-delay emails, and every comma-separated SKU must resolve to a product title. Dynamic Shipping Delay also requires either one global date or a valid delay update on every listed SKU.",
         },
         {status: 400},
       ),
@@ -119,6 +124,7 @@ export async function action({request}) {
       productImageUrl: primaryProduct?.productImageUrl || "",
       productTitle: primaryProduct?.productTitle || "",
       productVariantTitle: primaryProduct?.productVariantTitle || "",
+      globalShipDate,
       products: resolvedProducts,
       sentByEmail: session.email || "",
       shipDate,
@@ -204,6 +210,10 @@ function buildSubject({emailType, orderNumber}) {
     return `Shipping delay for order ${orderNumber}`.trim();
   }
 
+  if (emailType === "dynamic_shipping_delay") {
+    return `Shipping delay for order ${orderNumber}`.trim();
+  }
+
   return `Backorder status for order ${orderNumber}`.trim();
 }
 
@@ -216,11 +226,25 @@ function requiresSku(emailType) {
 
 function isPayloadAllowed({
   emailType,
+  globalShipDate,
   primaryProduct,
   products,
   requestedSkus,
   shipDate,
 }) {
+  if (emailType === "dynamic_shipping_delay") {
+    return (
+      requestedSkus.length > 0 &&
+      products.length > 0 &&
+      products.length === requestedSkus.length &&
+      Boolean(primaryProduct?.productTitle) &&
+      isDynamicShippingDelayConfigured({
+        globalShipDate,
+        products,
+      })
+    );
+  }
+
   if (requiresShipDate(emailType) && !shipDate) {
     return false;
   }
@@ -239,6 +263,26 @@ function isPayloadAllowed({
 
 function requiresShipDate(emailType) {
   return emailType === "backorder_notice" || emailType === "shipping_delay";
+}
+
+function isDynamicShippingDelayConfigured({globalShipDate, products}) {
+  if (`${globalShipDate || ""}`.trim()) {
+    return true;
+  }
+
+  return products.every((product) => {
+    const delayState = `${product?.delayState || ""}`.trim();
+
+    if (!delayState) {
+      return false;
+    }
+
+    if (delayState !== "specific_date") {
+      return true;
+    }
+
+    return Boolean(`${product?.delayDate || ""}`.trim());
+  });
 }
 
 function splitSkuInput(value) {
@@ -278,6 +322,8 @@ function normalizeProduct(product) {
   }
 
   return {
+    delayDate: `${product?.delay_date || product?.delayDate || ""}`.trim(),
+    delayState: `${product?.delay_state || product?.delayState || ""}`.trim(),
     productImageAlt:
       `${product?.product_image_alt || product?.productImageAlt || ""}`.trim(),
     productImageUrl:

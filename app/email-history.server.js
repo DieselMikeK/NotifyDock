@@ -200,6 +200,10 @@ function buildFallbackSubject({emailType, orderNumber}) {
     return `Shipping delay for order ${orderNumber}`.trim();
   }
 
+  if (emailType === "dynamic_shipping_delay") {
+    return `Shipping delay for order ${orderNumber}`.trim();
+  }
+
   return `Backorder status for order ${orderNumber}`.trim();
 }
 

@@ -20,6 +20,7 @@ export async function loader({request}) {
         customerEmail: `${url.searchParams.get("customerEmail") || ""}`.trim(),
         emailType: `${url.searchParams.get("emailType") || ""}`.trim(),
         firstName: `${url.searchParams.get("firstName") || ""}`.trim(),
+        globalShipDate: `${url.searchParams.get("globalShipDate") || ""}`.trim(),
         orderNumber: `${url.searchParams.get("orderNumber") || ""}`.trim(),
         products: parseProducts(url.searchParams.get("products")),
         shipDate: `${url.searchParams.get("shipDate") || ""}`.trim(),
@@ -130,6 +131,8 @@ function parseProducts(value) {
     return Array.isArray(products)
       ? products
           .map((product) => ({
+            delayDate: `${product?.delayDate || ""}`.trim(),
+            delayState: `${product?.delayState || ""}`.trim(),
             productImageAlt: `${product?.productImageAlt || ""}`.trim(),
             productImageUrl: `${product?.productImageUrl || ""}`.trim(),
             productTitle: `${product?.productTitle || ""}`.trim(),

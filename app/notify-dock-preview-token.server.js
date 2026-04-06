@@ -60,6 +60,7 @@ export function normalizePreviewPayload(payload) {
     customerEmail: `${payload?.customerEmail || ""}`.trim(),
     emailType: `${payload?.emailType || ""}`.trim(),
     firstName: `${payload?.firstName || ""}`.trim(),
+    globalShipDate: `${payload?.globalShipDate || ""}`.trim(),
     historyId: `${payload?.historyId || ""}`.trim(),
     historyShop: `${payload?.historyShop || ""}`.trim(),
     orderNumber: `${payload?.orderNumber || ""}`.trim(),
@@ -89,6 +90,8 @@ function normalizePreviewProducts(products) {
 
   return products
     .map((product) => ({
+      delayDate: `${product?.delayDate || ""}`.trim(),
+      delayState: `${product?.delayState || ""}`.trim(),
       productImageAlt: `${product?.productImageAlt || ""}`.trim(),
       productImageUrl: `${product?.productImageUrl || ""}`.trim(),
       productTitle: `${product?.productTitle || ""}`.trim(),
