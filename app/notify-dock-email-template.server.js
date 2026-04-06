@@ -76,7 +76,6 @@ export function buildNotifyDockMessage({
         globalShipDate: resolvedGlobalShipDate,
         products: resolvedProducts,
       }),
-      buildShippingDelayClosingMarkup(),
     ].join("");
   }
 
