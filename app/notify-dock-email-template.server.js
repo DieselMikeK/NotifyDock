@@ -156,7 +156,7 @@ function buildDynamicProductTable({product, statusMarkup = ""}) {
       ? [
           "<tr>",
           '<td colspan="2" style="padding:0 16px 16px 16px;">',
-          `<p style="margin:0; color:#111827; font-size:14px; line-height:20px;">${statusMarkup}</p>`,
+          `<p style="margin:0; color:#111827; font-size:16px; line-height:20px;">${statusMarkup}</p>`,
           "</td>",
           "</tr>",
         ].join("")
@@ -184,7 +184,7 @@ function buildDynamicGlobalDateTable(globalShipDate) {
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse; margin:0px 0 16px 0;">',
     "<tr>",
     '<td style="padding:0; text-align:center;">',
-    '<div style="margin:15px 0 30px 0;padding:0px;width:80%;text-align:center;margin:0 auto;">',
+    '<div style="padding:0px;width:80%;text-align:center;margin:0 auto;">',
     '<p style="margin:0; color:#111827; font-size:16px; line-height:20px;">Based on information that we have received from the manufacturer, the current Ship Date of your part(s) is:</p>',
     `<span style="font-weight:bold;font-family:Roboto, Helvetica, Arial, sans-serif;font-size:20px;letter-spacing:.75px;display:inline-block;width:100%;text-align:center;color:green;">${escapeHtml(globalShipDate)}</span>`,
     "</div>",

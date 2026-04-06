@@ -6,7 +6,6 @@ import {
   Box,
   Button,
   DateField,
-  DatePicker,
   Divider,
   Image,
   InlineStack,
@@ -621,6 +620,7 @@ function ProductPreviewList({
                 <DynamicDelayEditor
                   detail={dynamicDelayLookup.get(product.sku) || EMPTY_DYNAMIC_DELAY_DETAIL}
                   disabled={globalDelayActive}
+                  sku={product.sku || `${index}`}
                   onDelayDateChange={(value) => {
                     onDynamicDelayDateChange(product.sku, value);
                   }}
@@ -639,78 +639,36 @@ function ProductPreviewList({
 function DynamicDelayEditor({
   detail,
   disabled,
+  sku,
   onDelayDateChange,
 }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  const [pickerYearMonth, setPickerYearMonth] = useState(() =>
-    buildPickerYearMonth(detail.delayDate),
-  );
-
-  useEffect(() => {
-    if (disabled) {
-      setPickerOpen(false);
-    }
-  }, [disabled]);
-
-  useEffect(() => {
-    setPickerYearMonth(buildPickerYearMonth(detail.delayDate));
-  }, [detail.delayDate]);
+  const fieldId = `dynamic-delay-date-${sanitizeFieldToken(sku)}`;
+  const fieldName = `${fieldId}-input`;
 
   return (
-    <BlockStack gap="small">
-      <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
-        <Button
+    <InlineStack blockAlignment="center" gap="base" inlineAlignment="start">
+      <Box inlineSize="32%">
+        <DateField
           disabled={disabled}
-          onPress={() => {
-            setPickerOpen((open) => !open);
-          }}
-          variant="secondary"
-        >
-          {detail.delayDate || "Select date"}
-        </Button>
+          id={fieldId}
+          label=""
+          name={fieldName}
+          placeholder=""
+          value={detail.delayDate || ""}
+          onChange={onDelayDateChange}
+        />
+      </Box>
 
-        <Text>Item Specific Date</Text>
-      </InlineStack>
-
-      {pickerOpen && !disabled ? (
-        <Box paddingBlockStart="small">
-          <DatePicker
-            selected={detail.delayDate || undefined}
-            yearMonth={pickerYearMonth}
-            onChange={(selected) => {
-              if (typeof selected !== "string") {
-                return;
-              }
-
-              onDelayDateChange(selected);
-              setPickerYearMonth(buildPickerYearMonth(selected));
-              setPickerOpen(false);
-            }}
-            onYearMonthChange={setPickerYearMonth}
-          />
-        </Box>
-      ) : null}
-    </BlockStack>
+      <Text>Item Specific Date</Text>
+    </InlineStack>
   );
 }
 
-function buildPickerYearMonth(dateString) {
-  const candidate = `${dateString || ""}`.trim();
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(candidate)) {
-    const [year, month] = candidate.split("-").map(Number);
-
-    if (year && month) {
-      return {year, month};
-    }
-  }
-
-  const today = new Date();
-
-  return {
-    year: today.getFullYear(),
-    month: today.getMonth() + 1,
-  };
+function sanitizeFieldToken(value) {
+  return `${value || "item"}`
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "item";
 }
 
 function EmailPreviewContent({entry}) {
