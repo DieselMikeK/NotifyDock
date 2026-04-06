@@ -87,13 +87,13 @@ export function buildDynamicShippingDelayDetailsHtml({
   const resolvedProducts = Array.isArray(products) ? products.filter(Boolean) : [];
 
   if (!resolvedProducts.length) {
-    return "<p><strong>Product (SKU)</strong></p>";
+    return buildDynamicEmptyProductTable();
   }
 
   if (globalShipDate) {
     return [
-      buildProductMarkup(resolvedProducts),
-      `<p>Based on information that we have received from the manufacturer, the current ship date of your part(s) is: <strong>${escapeHtml(globalShipDate)}</strong></p>`,
+      resolvedProducts.map((product) => buildDynamicProductTable({product})).join(""),
+      buildDynamicGlobalDateTable(globalShipDate),
     ].join("");
   }
 
@@ -102,11 +102,13 @@ export function buildDynamicShippingDelayDetailsHtml({
       const resolvedDelayDate = formatNotifyDockShipDate(product.delayDate);
 
       return [
-        buildProductMarkup([product]),
-        `<p>${buildDynamicDelayStatusText({
-          delayDate: resolvedDelayDate,
-          delayState: product.delayState,
-        })}</p>`,
+        buildDynamicProductTable({
+          product,
+          statusMarkup: buildDynamicDelayStatusText({
+            delayDate: resolvedDelayDate,
+            delayState: product.delayState,
+          }),
+        }),
       ].join("");
     })
     .join("");
@@ -131,6 +133,77 @@ function buildDynamicDelayStatusText({delayDate, delayState}) {
   }
 
   return "Based on information that we have received from the manufacturer, there is not yet a confirmed ship date for this item.";
+}
+
+function buildDynamicProductTable({product, statusMarkup = ""}) {
+  const productLabel = buildProductLabel(
+    product.productTitle,
+    product.productVariantTitle,
+  );
+  const variantTitle =
+    product.productVariantTitle && product.productVariantTitle !== "Default Title"
+      ? product.productVariantTitle
+      : "";
+
+  return [
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse; margin:0 0 16px 0; border:1px solid #d1d5db;">',
+    "<tr>",
+    `<td style="width:120px; padding:16px; vertical-align:top;">${buildDynamicProductImageCell(product)}</td>`,
+    '<td style="padding:16px 16px 16px 0; vertical-align:top;">',
+    `<p style="margin:0 0 8px 0; color:#111827; font-size:16px; line-height:24px; font-weight:700;">${escapeHtml(productLabel || "Product")}</p>`,
+    variantTitle
+      ? `<p style="margin:0 0 8px 0; color:#374151; font-size:14px; line-height:20px;">${escapeHtml(variantTitle)}</p>`
+      : "",
+    `<p style="margin:0; color:#4b5563; font-size:14px; line-height:20px;">SKU: ${escapeHtml(product.sku || "SKU")}</p>`,
+    "</td>",
+    "</tr>",
+    statusMarkup
+      ? [
+          "<tr>",
+          '<td colspan="2" style="padding:0 16px 16px 16px;">',
+          `<p style="margin:0; color:#111827; font-size:14px; line-height:20px;">${statusMarkup}</p>`,
+          "</td>",
+          "</tr>",
+        ].join("")
+      : "",
+    "</table>",
+  ].join("");
+}
+
+function buildDynamicProductImageCell(product) {
+  if (product.productImageUrl) {
+    return `<img src="${escapeHtml(product.productImageUrl)}" alt="${escapeHtml(product.productImageAlt || buildProductLabel(product.productTitle, product.productVariantTitle) || "Product image")}" width="120" style="display:block; width:120px; max-width:120px; height:auto; border:0; outline:none; text-decoration:none;">`;
+  }
+
+  return [
+    '<table role="presentation" width="120" cellpadding="0" cellspacing="0" border="0" style="width:120px; border-collapse:collapse; border:1px solid #d1d5db;">',
+    "<tr>",
+    '<td style="height:120px; padding:12px; color:#6b7280; font-size:12px; line-height:18px; text-align:center; vertical-align:middle;">No image</td>',
+    "</tr>",
+    "</table>",
+  ].join("");
+}
+
+function buildDynamicGlobalDateTable(globalShipDate) {
+  return [
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse; margin:0 0 16px 0; border:1px solid #d1d5db;">',
+    "<tr>",
+    '<td style="padding:16px; color:#111827; font-size:14px; line-height:20px;">',
+    `Based on information that we have received from the manufacturer, the current ship date of your part(s) is: <strong>${escapeHtml(globalShipDate)}</strong>`,
+    "</td>",
+    "</tr>",
+    "</table>",
+  ].join("");
+}
+
+function buildDynamicEmptyProductTable() {
+  return [
+    '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse; margin:0 0 16px 0; border:1px solid #d1d5db;">',
+    "<tr>",
+    '<td style="padding:16px; color:#111827; font-size:14px; line-height:20px;"><strong>Product (SKU)</strong></td>',
+    "</tr>",
+    "</table>",
+  ].join("");
 }
 
 function buildProductMarkup(products) {
