@@ -335,16 +335,13 @@ function ActionComposer() {
         </InlineStack>
 
         {showsSku(emailType) && orderSkuReferences.length ? (
-          <BlockStack gap="small">
-            <Text>Order SKUs</Text>
-            <InlineStack gap="small" inlineAlignment="start">
-              {orderSkuReferences.map(({quantity, sku: referenceSku}) => (
-                <Badge key={referenceSku}>
-                  {quantity > 1 ? `${referenceSku} x${quantity}` : referenceSku}
-                </Badge>
-              ))}
-            </InlineStack>
-          </BlockStack>
+          <InlineStack gap="small" inlineAlignment="start">
+            {orderSkuReferences.map(({quantity, sku: referenceSku}) => (
+              <Badge key={referenceSku}>
+                {quantity > 1 ? `${referenceSku} x${quantity}` : referenceSku}
+              </Badge>
+            ))}
+          </InlineStack>
         ) : null}
 
         {showsSku(emailType) && loadingProduct ? (
