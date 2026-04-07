@@ -147,15 +147,15 @@ function buildDynamicProductTable({product, statusMarkup = ""}) {
     '<td style="padding:0; vertical-align:top;">',
     `<p style="margin:0;padding:0; color:#111827; font-size:18px; line-height:20px; font-weight:700;">${escapeHtml(productLabel || "Product")}</p>`,
     variantTitle
-      ? `<p style="margin:0;padding:5px 0; color:#374151; font-size:14px; line-height:20px;">${escapeHtml(variantTitle)}</p>`
+      ? `<p style="margin:0;padding:5px 0 0 0; color:#374151; font-size:14px; line-height:20px;">${escapeHtml(variantTitle)}</p>`
       : "",
-    `<p style="margin:0;padding:0; color:#4b5563; font-size:14px; line-height:20px;">${escapeHtml(product.sku || "SKU")}</p>`,
+    `<p style="margin:0;padding:5px 0 0 0; color:#4b5563; font-size:14px; line-height:20px;">${escapeHtml(product.sku || "SKU")}</p>`,
     "</td>",
     "</tr>",
     statusMarkup
       ? [
           "<tr>",
-          '<td colspan="2" style="padding:0 16px 16px 16px;">',
+          '<td colspan="2" style="padding:8px 16px 16px 16px;">',
           `<p style="margin:0; color:#111827; font-size:16px; line-height:20px;">${statusMarkup}</p>`,
           "</td>",
           "</tr>",
