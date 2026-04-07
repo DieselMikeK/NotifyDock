@@ -104,7 +104,7 @@ export async function action({request}) {
       json(
         {
           error:
-            "Order, customer email, order number, and subject are required. Ship date is required for legacy shipping-delay emails, and every comma-separated SKU must resolve to a product title. Dynamic Shipping Delay also requires either one global date or a valid delay update on every listed SKU.",
+            "Order, customer email, order number, and subject are required. Ship date is required for legacy shipping-delay emails, and every comma-separated SKU must resolve to a product title. Dynamic Shipping Delay also requires either one global date or valid resolved SKUs.",
         },
         {status: 400},
       ),
@@ -273,15 +273,7 @@ function isDynamicShippingDelayConfigured({globalShipDate, products}) {
   return products.every((product) => {
     const delayState = `${product?.delayState || ""}`.trim();
 
-    if (!delayState) {
-      return false;
-    }
-
-    if (delayState !== "specific_date") {
-      return true;
-    }
-
-    return Boolean(`${product?.delayDate || ""}`.trim());
+    return delayState !== "specific_date" || Boolean(`${product?.delayDate || ""}`.trim());
   });
 }
 
