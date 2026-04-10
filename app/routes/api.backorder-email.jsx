@@ -109,7 +109,7 @@ export async function action({request}) {
       json(
         {
           error:
-            "Order, customer email, order number, and subject are required. Ship date is required for legacy shipping-delay emails, and every comma-separated SKU must resolve to a product title. Shipping Delay also requires either one global date or valid resolved SKUs.",
+            "Order, customer email, order number, and subject are required. Legacy shipping-delay emails still require a ship date and resolved product details. Dynamic Shipping Delay requires at least one SKU plus either one global date or valid per-item dates or ranges.",
         },
         {status: 400},
       ),
@@ -242,7 +242,7 @@ function isPayloadAllowed({
       requestedSkus.length > 0 &&
       products.length > 0 &&
       products.length === requestedSkus.length &&
-      Boolean(primaryProduct?.productTitle) &&
+      products.every((product) => Boolean(`${product?.sku || ""}`.trim())) &&
       isDynamicShippingDelayConfigured({
         globalShipDate,
         products,
@@ -343,6 +343,7 @@ function normalizeProduct(product) {
     delayRangeStart:
       `${product?.delay_range_start || product?.delayRangeStart || ""}`.trim(),
     delayState: `${product?.delay_state || product?.delayState || ""}`.trim(),
+    productNotFound: Boolean(product?.product_not_found ?? product?.productNotFound),
     productImageAlt:
       `${product?.product_image_alt || product?.productImageAlt || ""}`.trim(),
     productImageUrl:

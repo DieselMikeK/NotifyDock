@@ -721,6 +721,10 @@ function ProductPreviewList({
                       </Text>
 
                       <Text>SKU: {product.sku || "{{ item.sku }}"}</Text>
+
+                      {isUnresolvedStoreSku(product) ? (
+                        <Text>This SKU isn't found on our store. The email will use the SKU only.</Text>
+                      ) : null}
                     </BlockStack>
                   </Box>
                 </InlineStack>
@@ -921,6 +925,10 @@ function formatHistoryTimestamp(sentAt) {
 }
 
 function buildProductTitle(product) {
+  if (isUnresolvedStoreSku(product)) {
+    return `SKU ${product.sku}`;
+  }
+
   return product?.productTitle || "{{ item.product_title }}";
 }
 
@@ -1229,6 +1237,10 @@ function isDynamicShippingDelayReady({
   }
 
   return dynamicDelayDetails.length === products.length;
+}
+
+function isUnresolvedStoreSku(product) {
+  return Boolean(`${product?.sku || ""}`.trim()) && !`${product?.productTitle || ""}`.trim();
 }
 
 async function requestPreviewHref(payload) {

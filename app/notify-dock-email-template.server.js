@@ -152,21 +152,25 @@ function buildDynamicProductTable({product, statusMarkup = ""}) {
     product.productTitle,
     product.productVariantTitle,
   );
+  const productHeading = buildProductHeading(product);
   const variantTitle =
     product.productVariantTitle && product.productVariantTitle !== "Default Title"
       ? product.productVariantTitle
       : "";
+  const showSeparateSkuLine = Boolean(`${product?.sku || ""}`.trim() && productLabel);
 
   return [
     '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%; border-collapse:collapse; margin:0 0 16px 0; border:0px;">',
     "<tr>",
     `<td style="width:120px; padding: 0px 16px 0px 0px; vertical-align:top;">${buildDynamicProductImageCell(product)}</td>`,
     '<td style="padding:0; vertical-align:top;">',
-    `<p style="margin:0;padding:0; color:#111827; font-size:18px; line-height:20px; font-weight:700;">${escapeHtml(productLabel || "Product")}</p>`,
+    `<p style="margin:0;padding:0; color:#111827; font-size:18px; line-height:20px; font-weight:700;">${escapeHtml(productHeading)}</p>`,
     variantTitle
       ? `<p style="margin:0;padding:5px 0 0 0; color:#374151; font-size:14px; line-height:20px;">${escapeHtml(variantTitle)}</p>`
       : "",
-    `<p style="margin:0;padding:5px 0 0 0; color:#4b5563; font-size:14px; line-height:20px;">${escapeHtml(product.sku || "SKU")}</p>`,
+    showSeparateSkuLine
+      ? `<p style="margin:0;padding:5px 0 0 0; color:#4b5563; font-size:14px; line-height:20px;">${escapeHtml(product.sku || "SKU")}</p>`
+      : "",
     "</td>",
     "</tr>",
     statusMarkup
@@ -233,6 +237,10 @@ function buildProductMarkup(products) {
         product.productVariantTitle,
       );
 
+      if (!productLabel && product?.sku) {
+        return `<p><strong>SKU ${escapeHtml(product.sku)}</strong></p>`;
+      }
+
       return `<p><strong>${escapeHtml(productLabel || "Product")} (${escapeHtml(product.sku || "SKU")})</strong></p>`;
     })
     .join("");
@@ -255,6 +263,23 @@ function buildProductLabel(productTitle, productVariantTitle) {
   }
 
   return `${productTitle || ""} - ${productVariantTitle}`.trim();
+}
+
+function buildProductHeading(product) {
+  const productLabel = buildProductLabel(
+    product?.productTitle,
+    product?.productVariantTitle,
+  );
+
+  if (productLabel) {
+    return productLabel;
+  }
+
+  if (`${product?.sku || ""}`.trim()) {
+    return `SKU ${product.sku}`;
+  }
+
+  return "Product";
 }
 
 function escapeHtml(value) {

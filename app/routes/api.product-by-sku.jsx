@@ -60,22 +60,14 @@ export async function loader({request}) {
         ),
     );
 
-    if (!products.length) {
-      return cors(
-        json(
-          {
-            error: `No Shopify product matched SKU${requestedSkus.length > 1 ? "s" : ""} ${requestedSkus.join(", ")}.`,
-          },
-          {status: 404},
-        ),
-      );
-    }
-
     return cors(
       json({
-        ok: missingSkus.length === 0,
+        message: missingSkus.length
+          ? `No Shopify product matched SKU${missingSkus.length > 1 ? "s" : ""}: ${missingSkus.join(", ")}.`
+          : "",
         missingSkus,
-        product: products[0],
+        ok: products.length > 0 && missingSkus.length === 0,
+        product: products[0] || null,
         products,
       }),
     );
