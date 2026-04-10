@@ -240,7 +240,12 @@ export function useComposerState(target) {
           ? payload.missingSkus.filter(Boolean)
           : [];
 
-        setProducts(resolvedProducts);
+        setProducts(
+          buildRequestedProducts({
+            requestedSkus,
+            resolvedProducts,
+          }),
+        );
         setLookupError(buildMissingSkuMessage(missingSkus));
       } catch (lookupError) {
         if (cancelled) {
@@ -492,7 +497,8 @@ export function canSendComposer({
     !fromAddress ||
     !subject ||
     loadingOrder ||
-    (skuRequired && (loadingProduct || Boolean(lookupError)))
+    loadingProduct ||
+    (skuRequired && Boolean(lookupError) && !allowsUnresolvedSku(emailType))
   ) {
     return false;
   }
@@ -506,7 +512,14 @@ export function canSendComposer({
       return false;
     }
 
-    if (products.some((product) => !product.productTitle)) {
+    if (
+      !allowsUnresolvedSku(emailType) &&
+      products.some((product) => !product.productTitle)
+    ) {
+      return false;
+    }
+
+    if (products.some((product) => !product.sku)) {
       return false;
     }
   }
@@ -654,9 +667,33 @@ function normalizeFetchedProduct(product) {
     productImageAlt: `${product?.imageAlt || ""}`.trim(),
     productImageUrl: `${product?.imageUrl || ""}`.trim(),
     productTitle,
+    productNotFound: false,
     productVariantTitle: `${product?.variantTitle || ""}`.trim(),
     sku,
   };
+}
+
+function buildRequestedProducts({requestedSkus, resolvedProducts}) {
+  const resolvedBySku = new Map(
+    resolvedProducts.map((product) => [normalizeSku(product?.sku), product]),
+  );
+
+  return requestedSkus.map((requestedSku) => {
+    const resolvedProduct = resolvedBySku.get(normalizeSku(requestedSku));
+
+    if (resolvedProduct) {
+      return resolvedProduct;
+    }
+
+    return {
+      productImageAlt: "",
+      productImageUrl: "",
+      productNotFound: true,
+      productTitle: "",
+      productVariantTitle: "",
+      sku: `${requestedSku || ""}`.trim(),
+    };
+  });
 }
 
 function serializeProductPayload(product) {
@@ -667,6 +704,7 @@ function serializeProductPayload(product) {
     delay_state: product.delayState || "",
     product_image_alt: product.productImageAlt || "",
     product_image_url: product.productImageUrl || "",
+    product_not_found: Boolean(product.productNotFound),
     product_title: product.productTitle || "",
     product_variant_title: product.productVariantTitle || "",
     sku: product.sku || "",
@@ -678,7 +716,9 @@ function buildMissingSkuMessage(missingSkus) {
     return "";
   }
 
-  return `No Shopify product matched SKU${missingSkus.length > 1 ? "s" : ""}: ${missingSkus.join(", ")}.`;
+  return missingSkus.length === 1
+    ? `This SKU isn't found on our store: ${missingSkus[0]}. Notify Dock will send the SKU only.`
+    : `These SKUs aren't found on our store: ${missingSkus.join(", ")}. Notify Dock will send each SKU only.`;
 }
 
 function buildOrderSkuReferences(lineItems) {
@@ -707,6 +747,10 @@ function buildOrderSkuReferences(lineItems) {
 
 function isDynamicShippingDelay(emailType) {
   return emailType === DYNAMIC_SHIPPING_DELAY_EMAIL_TYPE;
+}
+
+function allowsUnresolvedSku(emailType) {
+  return isDynamicShippingDelay(emailType);
 }
 
 function attachDynamicDelayDetails({delayDetails, emailType, products}) {
@@ -744,4 +788,8 @@ function attachDynamicDelayDetails({delayDetails, emailType, products}) {
       delayState: detail.delayState,
     };
   });
+}
+
+function normalizeSku(value) {
+  return `${value || ""}`.trim().toUpperCase();
 }
