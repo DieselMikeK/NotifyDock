@@ -6,6 +6,6 @@
     "@shopify/ui-extensions": "2025.7.3",
     "@shopify/ui-extensions-react": "2025.7.3",
     "react": "^18.2.0",
-    "react-reconciler": "^0.29.0"
+    "react-reconciler": "^0.33.0"
   }
 }
